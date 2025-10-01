@@ -1,17 +1,16 @@
-// filepath: c:\Users\VIVOBOOK\OneDrive - Mindoro State University\Desktop\DOMUS Architecture\frontend\src\lib\firebase.js
-import { initializeApp } from 'firebase/app'
-import { getAnalytics, isSupported } from 'firebase/analytics'
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-}
+  apiKey: "AIzaSyBu9iKuv9xbDG8fv8PP8gNE1sM_-HEvP1w",
+  authDomain: "dts-capstone.firebaseapp.com",
+  databaseURL: "https://dts-capstone-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "dts-capstone",
+  storageBucket: "dts-capstone.firebasestorage.app",
+  messagingSenderId: "122242359189",
+  appId: "1:122242359189:web:8dfa94837349845d45a09c",
+  measurementId: "G-GB1WMN4YY5"
+};
 
-export const app = initializeApp(firebaseConfig)
-export const analytics = await isSupported().then(ok => (ok ? getAnalytics(app) : null))
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
