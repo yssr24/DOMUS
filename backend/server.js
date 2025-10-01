@@ -12,15 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  }),
-  databaseURL: process.env.FIREBASE_DB_URL,
-});
-
+const admin = require("./config/database");
 
 // User routes
 app.use('/api/users', userRoutes);
