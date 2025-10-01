@@ -12,12 +12,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Firebase admin init
-const serviceAccount = require("./config/dts-capstone-firebase-adminsdk-fbsvc-c7c0da1bc4.json"); // correct path
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+  credential: admin.credential.cert({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  }),
   databaseURL: process.env.FIREBASE_DB_URL,
 });
+
 
 // User routes
 app.use('/api/users', userRoutes);
