@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "serve -s dist"
   },
   "dependencies": {
     "apexcharts": "^5.3.5",
+    "serve": "^14.2.5",
     "vue": "^3.5.21",
     "vue-router": "^4.5.1",
     "vue3-apexcharts": "^1.8.0"
