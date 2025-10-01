@@ -1,16 +1,15 @@
-// ...existing code...
-const admin = require('firebase-admin')
+// backend/config/database.js
+const admin = require("firebase-admin");
 
-// Ensure initialized elsewhere (server.js). If not, init here with env.
+// Parse the service account JSON from env
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+// Initialize Firebase Admin SDK (only once)
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
+    credential: admin.credential.cert(serviceAccount),
     databaseURL: process.env.FIREBASE_DB_URL,
-  })
+  });
 }
 
-module.exports = admin
+module.exports = admin;
