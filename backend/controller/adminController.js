@@ -4,6 +4,8 @@ const fs = require('fs')
 const nodemailer = require('nodemailer')
 const paths = require('../config/paths')
 const { FRONTEND_BASE_URL } = require('../config/appConfig')
+const crypto = require('crypto')
+
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -581,5 +583,64 @@ exports.getTasks = async (_req, res) => {
   } catch (err) {
     console.error('getTasks error:', err)
     res.status(500).json({ success: false, message: 'Failed to fetch tasks.' })
+  }
+}
+
+exports.addDesign = async (req, res) => {
+  try {
+    const { title = '', description = '', createdAt } = req.body || {}
+    const files = Array.isArray(req.files) ? req.files : []
+
+    const bucket = require('../config/database').storage().bucket()
+    const imageUrls = []
+
+    for (const f of files) {
+      const safeName = f.originalname.replace(/\s+/g, '_')
+      const filePath = `design/${Date.now()}-${safeName}`
+      const token = crypto.randomUUID()
+
+      const file = bucket.file(filePath)
+      await file.save(f.buffer, {
+        resumable: false,
+        contentType: f.mimetype,
+        metadata: {
+          contentType: f.mimetype,
+          metadata: { firebaseStorageDownloadTokens: token }
+        }
+      })
+
+      const encoded = encodeURIComponent(filePath)
+      const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encoded}?alt=media&token=${token}`
+      imageUrls.push(url)
+    }
+
+    const doc = {
+      title: title.trim(),
+      description: description.trim(),
+      createdAt: createdAt ? new Date(createdAt).toISOString() : new Date().toISOString(),
+      images: imageUrls
+    }
+
+    const ref = await require('firebase-admin').firestore().collection('designs').add(doc)
+
+    res.json({ success: true, id: ref.id, data: { id: ref.id, ...doc } })
+  } catch (err) {
+    console.error('addDesign error:', err)
+    res.status(500).json({ success: false, message: 'Failed to save design.' })
+  }
+}
+
+exports.getDesigns = async (req, res) => {
+  try {
+    const snap = await admin.firestore()
+      .collection('designs')
+      .orderBy('createdAt', 'desc')
+      .get()
+
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    res.json({ success: true, data })
+  } catch (err) {
+    console.error('getDesigns error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch designs.' })
   }
 }

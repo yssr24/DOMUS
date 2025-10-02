@@ -231,6 +231,20 @@ function goTo(path) {
             </span>
             <span v-if="showSidebar" class="sidebar-text">Billing & Finance</span>
           </a>
+          <a
+            v-if="!isNarrow || showSidebar"
+            href="#"
+            class="sidebar-link"
+            :class="{ active: route.path === '/admin/website' }"
+            @click.prevent="goTo('/admin/website')"
+          >
+            <span class="sidebar-icon">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
+                <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm7.94 9h-3.19a15.6 15.6 0 00-1.16-5.04A8.03 8.03 0 0119.94 11zM12 4a13.6 13.6 0 011.77 6H10.23A13.6 13.6 0 0112 4zM8.41 5.96A15.6 15.6 0 007.25 11H4.06a8.03 8.03 0 014.35-5.04zM4.06 13h3.19c.26 1.84.74 3.56 1.16 5.04A8.03 8.03 0 014.06 13zm6.17 0h3.54A13.6 13.6 0 0112 20a13.6 13.6 0 01-1.77-7zM15.59 18.04c.48-1.4.9-3.19 1.16-5.04h3.19a8.03 8.03 0 01-4.35 5.04z" fill="#e6b23a"/>
+              </svg>
+            </span>
+            <span v-if="showSidebar" class="sidebar-text">Website</span>
+          </a>
         </nav>
       </aside>
       <main class="admin-main">
@@ -388,6 +402,9 @@ function goTo(path) {
   z-index: 20;
   position: relative;
   height: auto;
+  overflow-y: auto;              /* enable scroll */
+  -webkit-overflow-scrolling: touch; /* smooth iOS scrolling */
+  overscroll-behavior: contain;  /* keep scroll inside sidebar on mobile */
 }
 .admin-sidebar.collapsed {
   width: 64px;
@@ -401,6 +418,7 @@ function goTo(path) {
   flex-direction: column;
   gap: 6px;
   padding: 0 8px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)); /* avoid last item cutoff */
 }
 .logo-link {
   margin-bottom: 10px;
@@ -510,6 +528,8 @@ function goTo(path) {
     box-shadow: 2px 0 16px #0001;
     transition: transform 0.2s, width 0.2s;
     transform: translateX(0);
+    overflow-y: auto;              /* keep scroll when fixed */
+    -webkit-overflow-scrolling: touch;
   }
   .admin-sidebar.collapsed {
     transform: translateX(-100%);
@@ -519,23 +539,17 @@ function goTo(path) {
   .admin-sidebar.mobilefull {
     top: 0;
     height: 100vh !important;
+    overflow-y: auto;              /* keep scroll in full-screen */
+    -webkit-overflow-scrolling: touch;
   }
   .admin-main {
     margin-left: 0;
   }
   .admin-content {
-    padding: 18px 8px;
+    padding: 18px 8px 120px; /* extra bottom space on mobile */
   }
-  .admin-topbar {
-    padding: 0 8px;
-    height: 56px;
-  }
-  .topbar-search input {
-    width: 90px;
-    font-size: 0.95rem;
-  }
-  .topbar-title {
-    font-size: 1rem;
+  .admin-content-scroll {
+    padding-bottom: 20px; /* slight extra for scroll container */
   }
 }
 @media (max-width: 600px) {
@@ -549,8 +563,12 @@ function goTo(path) {
     width: 100vw !important;
     min-width: 100vw !important;
   }
-    .admin-content {
-    padding: 8px 2px;
+  .admin-content {
+    padding: 8px 2px 140px; /* larger bottom spacing on small phones */
+    padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px)); /* safe-area for iOS */
+  }
+  .admin-content-scroll {
+    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
   }
 }
 </style>
