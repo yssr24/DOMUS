@@ -1,17 +1,18 @@
-// ...existing code...
-const admin = require('firebase-admin')
+// backend/config/database.js
+const admin = require("firebase-admin");
 
-// Ensure initialized elsewhere (server.js). If not, init here with env.
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+// Convert the \\n back to real newlines
+serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
+    credential: admin.credential.cert(serviceAccount),
     databaseURL: process.env.FIREBASE_DB_URL,
     storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  })
+
+  });
 }
 
-module.exports = admin
+module.exports = admin;
