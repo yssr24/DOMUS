@@ -2,6 +2,11 @@
   <div class="overview-wrap">
     <header class="ov-header">
       <h2>Admin Overview</h2>
+
+      <div class="ov-actions">
+        <button class="btn dl pdf" @click="downloadPDF">Download PDF</button>
+        <button class="btn dl csv" @click="downloadCSV">Download CSV</button>
+      </div>
     </header>
 
     <!-- KPI Cards -->
@@ -132,6 +137,156 @@ onMounted(() => {
     totalClients: 42,
   }
 })
+
+function getUserRegistrationRows() {
+  const cats = (userChartOptions.value?.xaxis?.categories || []).map(String)
+  const data = (userChartSeries.value?.[0]?.data || [])
+  const rows = cats.map((d, i) => [d, data[i] ?? 0])
+  return { head: ['Day', 'Registrations'], rows }
+}
+
+function getProjectRows() {
+  const labels = (projChartOptions.value?.labels || []).map(String)
+  const data = (projChartSeries.value || [])
+  const rows = labels.map((s, i) => [s, data[i] ?? 0])
+  return { head: ['Status', 'Count'], rows }
+}
+
+function getUserRows() {
+  const rows = (users.value || []).map(u => [u.name, u.email, u.role, u.status, u.joined])
+  return { head: ['Name', 'Email', 'Role', 'Status', 'Joined'], rows }
+}
+
+// CSV download
+function downloadCSV() {
+  const parts = []
+
+  // Section 1: User Registrations
+  {
+    const { head, rows } = getUserRegistrationRows()
+    parts.push('User Registrations')
+    parts.push(head.join(','))
+    rows.forEach(r => parts.push(r.join(',')))
+    parts.push('') // blank line
+  }
+
+  // Section 2: Projects by Status
+  {
+    const { head, rows } = getProjectRows()
+    parts.push('Projects by Status')
+    parts.push(head.join(','))
+    rows.forEach(r => parts.push(r.join(',')))
+    parts.push('')
+  }
+
+  // Section 3: Users
+  {
+    const { head, rows } = getUserRows()
+    parts.push('Users')
+    parts.push(head.join(','))
+    rows.forEach(r => {
+      // Basic CSV escaping for commas/quotes
+      const escaped = r.map(v => {
+        const s = String(v ?? '')
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+      })
+      parts.push(escaped.join(','))
+    })
+  }
+
+  const csv = parts.join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `overview-sample-${new Date().toISOString().slice(0,10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+// PDF download (uses jspdf + jspdf-autotable)
+async function downloadPDF() {
+  try {
+    const [{ jsPDF }, autoTable] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable').then(m => m.default || m)
+    ])
+
+    const doc = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' })
+    const marginX = 36
+    let y = 48
+
+    // Title
+    doc.setFontSize(16)
+    doc.text('Admin Overview Report (Sample)', marginX, y)
+    doc.setFontSize(10)
+    doc.setTextColor('#666')
+    y += 16
+    doc.text(`Generated: ${new Date().toLocaleString()}`, marginX, y)
+    doc.setTextColor('#000')
+    y += 18
+
+    // Section: User Registrations
+    {
+      doc.setFontSize(12)
+      doc.text('User Registrations', marginX, y)
+      y += 8
+      const { head, rows } = getUserRegistrationRows()
+      autoTable(doc, {
+        startY: y,
+        head: [head],
+        body: rows,
+        theme: 'striped',
+        styles: { fontSize: 10, cellPadding: 6 },
+        headStyles: { fillColor: [25, 118, 210], textColor: 255 },
+        margin: { left: marginX, right: marginX }
+      })
+      y = (doc.lastAutoTable?.finalY || y) + 20
+    }
+
+    // Section: Projects by Status
+    {
+      doc.setFontSize(12)
+      doc.text('Projects by Status', marginX, y)
+      y += 8
+      const { head, rows } = getProjectRows()
+      autoTable(doc, {
+        startY: y,
+        head: [head],
+        body: rows,
+        theme: 'striped',
+        styles: { fontSize: 10, cellPadding: 6 },
+        headStyles: { fillColor: [230, 178, 58], textColor: 0 },
+        margin: { left: marginX, right: marginX }
+      })
+      y = (doc.lastAutoTable?.finalY || y) + 20
+    }
+
+    // Section: Users
+    {
+      doc.setFontSize(12)
+      doc.text('Users', marginX, y)
+      y += 8
+      const { head, rows } = getUserRows()
+      autoTable(doc, {
+        startY: y,
+        head: [head],
+        body: rows,
+        theme: 'striped',
+        styles: { fontSize: 10, cellPadding: 6 },
+        headStyles: { fillColor: [67, 160, 71], textColor: 255 },
+        margin: { left: marginX, right: marginX }
+      })
+    }
+
+    doc.save(`overview-sample-${new Date().toISOString().slice(0,10)}.pdf`)
+  } catch (e) {
+    console.error(e)
+    alert('PDF generation requires jspdf and jspdf-autotable. Please install them.')
+  }
+}
 </script>
 
 <script>
@@ -237,7 +392,33 @@ export default {
 .pill.active { color:#1f7a1f; background:#ecfaec; border-color:#cfeccc; }
 .pill.inactive { color:#888; background:#f3f3f3; border-color:#ddd; }
 .mono { font-family: ui-monospace, Menlo, Consolas, Monaco, monospace; }
-
+.ov-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ov-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn.dl {
+  appearance: none;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #213547;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: .9rem;
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s, transform .05s;
+  box-shadow: 0 2px 8px #00000010;
+}
+.btn.dl:hover { background: #f8fafc; }
+.btn.dl:active { transform: translateY(1px); }
+.btn.dl.pdf { border-color: #1976d233; }
+.btn.dl.csv { border-color: #43a04733; }
 @media (max-width: 900px) {
   .ov-cards { grid-template-columns: repeat(2, 1fr); }
   .ov-charts { grid-template-columns: 1fr; }

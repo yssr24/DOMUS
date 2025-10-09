@@ -57,6 +57,8 @@
               <th @click="toggleSort('title')" :class="sortClass('title')">Project Title</th>
               <th @click="toggleSort('ownerName')" :class="sortClass('ownerName')">Owner</th>
               <th @click="toggleSort('status')" :class="sortClass('status')">Status</th>
+              <th @click="toggleSort('progress')" :class="sortClass('progress')">Progress</th>
+
             </tr>
           </thead>
           <tbody>
@@ -75,6 +77,14 @@
               <td>{{ p.ownerName }}</td>
               <td>
                 <span class="status-pill" :class="statusClass(p.status)">{{ prettyStatus(p.status) }}</span>
+              </td>
+              <td class="progress-cell">
+                <div class="progress">
+                  <div class="progress-track">
+                    <div class="progress-fill" :style="{ width: (p.progress ?? 0) + '%' }"></div>
+                  </div>
+                  <span class="progress-text">{{ (p.progress ?? 0) }}%</span>
+                </div>
               </td>
               <td class="actions-col">
                 <button class="icon-btn" title="Assign" @click="onAssign(p)">
@@ -175,10 +185,16 @@ const sortedRows = computed(() => {
   const key = sortKey.value
   const dir = sortDir.value === 'asc' ? 1 : -1
   arr.sort((a, b) => {
-    const va = (a[key] ?? '').toString().toLowerCase()
-    const vb = (b[key] ?? '').toString().toLowerCase()
-    if (va < vb) return -1 * dir
-    if (va > vb) return 1 * dir
+    const va = a[key]
+    const vb = b[key]
+    // numeric sort when both are numbers (e.g., progress)
+    if (typeof va === 'number' && typeof vb === 'number' && !Number.isNaN(va) && !Number.isNaN(vb)) {
+      return (va - vb) * dir
+    }
+    const sa = (va ?? '').toString().toLowerCase()
+    const sb = (vb ?? '').toString().toLowerCase()
+    if (sa < sb) return -1 * dir
+    if (sa > sb) return 1 * dir
     return 0
   })
   return arr
@@ -199,6 +215,8 @@ async function fetchProjects() {
       status: p.status,
       ownerEmail: p.ownerEmail,
       ownerId: p.ownerId,
+      // NEW: progress (fallback to 0 if API doesn’t provide it)
+      progress: Number(p.progress ?? 0)
     }))
     // update quick stats
     totalProjects.value = rows.value.length
@@ -514,5 +532,46 @@ onMounted(fetchProjects)
 .center { text-align: center; }
 .muted { color: #777; }
 .error { color: #c62828; }
+.projects-table thead th:nth-child(5) {
+  min-width: 140px;
+}
 
+.progress-cell {
+  min-width: 160px;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 10px;
+  background: #eef2f7;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.06);
+}
+
+.progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #1976d2, #1565c0);
+  border-radius: 999px;
+  transition: width .25s ease;
+}
+
+.progress-text {
+  font-weight: 700;
+  font-size: .86rem;
+  color: #213547;
+  min-width: 36px;
+  text-align: right;
+}
 </style>
