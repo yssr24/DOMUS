@@ -16,6 +16,8 @@ import clientPortal from './components/admin/content/clientPortal.vue'
 import NotificationCenter from './components/admin/content/notificationCenter.vue'
 import Billing_and_finance from './components/admin/content/billing_and_finance.vue'
 import Website from './components/admin/content/Website.vue'
+import FileView from './components/admin/content/file-view.vue' // NEW
+
 
 import AddProject from './components/admin/content/projectmanagement/addProject.vue'
 import CreateTask from './components/admin/content/taskmanagement/createTask.vue'
@@ -74,8 +76,12 @@ const routes = [
         component: Billing_and_finance 
       },
       {
-        path: 'website',
+        path: 'website', 
         component: Website
+      },
+      {
+        path: 'file-view',
+        component: FileView
       }
 
 
