@@ -92,6 +92,9 @@
               <td class="ellipsis" :title="f.uploadedBy">{{ f.uploadedBy }}</td>
               <td class="mono">{{ formatDate(f.uploadedAt) }}</td>
               <td>
+              <button class="link-btn" @click.stop="openView(f)">
+                View
+              </button>
                 <button class="link-btn" @click="download(f)">
                   <svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 3v10m0 0l4-4m-4 4l-4-4M5 21h14" stroke="#1976d2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   Download
@@ -108,6 +111,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { API_BASE_URL } from '../../../config'
+import { useRouter } from 'vue-router'
+
 
 const files = ref([])
 const loading = ref(false)
@@ -116,6 +121,9 @@ const error = ref('')
 const search = ref('')
 const sortKey = ref('uploadedAt')
 const sortDir = ref('desc')
+
+const router = useRouter()
+
 
 function thClass(key) {
   return { sortable: true, 'sort-asc': sortKey.value === key && sortDir.value === 'asc', 'sort-desc': sortKey.value === key && sortDir.value === 'desc' }
@@ -218,42 +226,37 @@ function formatDate(v) {
 }
 
 async function fetchFiles() {
-  loading.value = true
-  error.value = ''
+  loading.value = true; error.value = ''
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/files`)
-    if (!res.ok) throw new Error('Failed to load files')
-    const json = await res.json()
-    files.value = (json.data || []).map(f => ({
+    const r = await fetch(`${API_BASE_URL}/api/admin/files`)
+    const j = await r.json()
+    if (!r.ok || !j.success) throw new Error(j.message || 'Failed to load files')
+    files.value = (j.data || []).map(f => ({
       id: f.id,
-      name: f.name || f.filename,
-      type: f.type || f.mimeType || '',
-      size: f.size || 0,
-      project: f.projectTitle || f.project || '—',
-      uploadedBy: f.uploaderName || f.uploadedBy || '—',
-      uploadedAt: f.uploadedAt || f.createdAt || null,
-      url: f.url || '#'
+      name: f.name,
+      type: f.type,
+      size: f.size,
+      uploadedAt: f.uploadedAt,
+      path: f.path // Storage path, e.g., fil/mydoc.pdf
     }))
-  } catch (e) {
-    // Demo data fallback
-    files.value = [
-      { id: '1', name: 'FloorPlan_Level1.dwg', type: 'dwg', size: 2_560_000, project: 'PR-0007 | Rivera Residence', uploadedBy: 'Cruz, Leo', uploadedAt: new Date(Date.now() - 86400000), url: '#' },
-      { id: '2', name: '3D_Render_Lobby.png', type: 'png', size: 980_112, project: 'PR-0005 | Gomez Office', uploadedBy: 'Reyes, Maria', uploadedAt: new Date(Date.now() - 2*86400000), url: '#' },
-      { id: '3', name: 'Structural_Notes.pdf', type: 'pdf', size: 1_730_000, project: 'PR-0010 | Loyola Townhouse', uploadedBy: 'Santos, Juan', uploadedAt: new Date(Date.now() - 3*86400000), url: '#' },
-      { id: '4', name: 'Specification.docx', type: 'docx', size: 450_000, project: 'PR-0003 | Dela Cruz House', uploadedBy: 'Dela Cruz, Ana', uploadedAt: new Date(Date.now() - 4*86400000), url: '#' },
-      { id: '5', name: 'SitePhotos.zip', type: 'zip', size: 12_200_000, project: 'PR-0007 | Rivera Residence', uploadedBy: 'Rivera, Kim', uploadedAt: new Date(Date.now() - 5*86400000), url: '#' },
-    ]
-  } finally {
-    loading.value = false
-  }
+  } catch (e) { error.value = e.message || 'Network error' }
+  finally { loading.value = false }
 }
 
 function onUpload() {
   alert('Upload clicked (hook up your modal or uploader here)')
 }
+function openView(f) {
+  const url = `${API_BASE_URL}/api/admin/file?path=${encodeURIComponent(f.path)}&disposition=inline`
+  router.push({
+    path: '/admin/file-view',
+    query: { url: encodeURIComponent(url), name: f.name, type: f.type }
+  })
+}
+
 function download(f) {
-  if (f.url && f.url !== '#') window.open(f.url, '_blank')
-  else alert('No URL set for this file in the sample data.')
+  const url = `${API_BASE_URL}/api/admin/file?path=${encodeURIComponent(f.path)}&disposition=attachment`
+  window.open(url, '_blank')
 }
 
 onMounted(fetchFiles)
@@ -412,6 +415,7 @@ onMounted(fetchFiles)
 .mono { font-family: ui-monospace, Menlo, Consolas, Monaco, monospace; }
 .ellipsis { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
 .link-btn { display:inline-flex; align-items:center; gap:6px; background:transparent; border:none; color:#1976d2; cursor:pointer; font-weight:700; }
+.actions { display:flex; gap:10px; }
 
 @media (max-width: 900px) {
   .fd-cards { grid-template-columns: repeat(2, 1fr); }

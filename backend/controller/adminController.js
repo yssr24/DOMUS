@@ -644,3 +644,69 @@ exports.getDesigns = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch designs.' })
   }
 }
+
+// ...existing code...
+
+// List files under "fil/" (no signed URLs; we stream via backend)
+exports.getFiles = async (_req, res) => {
+  try {
+    const bucket = require('../config/database').storage().bucket()
+    const prefix = 'files/'
+    const [gcsFiles] = await bucket.getFiles({ prefix })
+
+    const items = []
+    for (const f of gcsFiles) {
+      if (f.name.endsWith('/')) continue
+      const [meta] = await f.getMetadata()
+      const baseName = f.name.substring(f.name.lastIndexOf('/') + 1)
+      items.push({
+        id: f.name,
+        path: f.name,                 // storage path (fil/xxx.pdf)
+        name: baseName,               // show exact filename in table
+        type: meta.contentType || '',
+        size: Number(meta.size) || 0,
+        uploadedAt: meta.updated || meta.timeCreated || null
+      })
+    }
+    items.sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
+    res.json({ success: true, data: items })
+  } catch (err) {
+    console.error('getFiles error:', err)
+    res.status(500).json({ success: false, message: 'Failed to list files.' })
+  }
+}
+
+// Stream a file from Storage (fixes browser CORS for pdf.js/image)
+// GET /api/admin/file?path=fil/xyz.pdf&disposition=inline|attachment
+exports.streamFile = async (req, res) => {
+  try {
+    const path = String(req.query.path || '')
+    if (!path || !path.startsWith('files/')) {
+      return res.status(400).json({ success: false, message: 'Invalid path.' })
+    }
+    const bucket = require('../config/database').storage().bucket()
+    const file = bucket.file(path)
+    const [exists] = await file.exists()
+    if (!exists) return res.status(404).json({ success: false, message: 'Not found.' })
+
+    const [meta] = await file.getMetadata()
+    const baseName = path.substring(path.lastIndexOf('/') + 1)
+    const disp = String(req.query.disposition || 'inline').toLowerCase() === 'attachment' ? 'attachment' : 'inline'
+
+    res.setHeader('Content-Type', meta.contentType || 'application/octet-stream')
+    res.setHeader('Content-Disposition', `${disp}; filename="${encodeURIComponent(baseName)}"`)
+    res.setHeader('Cache-Control', 'private, max-age=60')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+
+    file.createReadStream()
+      .on('error', (e) => {
+        console.error('streamFile error:', e)
+        if (!res.headersSent) res.status(500).end('Stream error')
+      })
+      .pipe(res)
+  } catch (err) {
+    console.error('streamFile error:', err)
+    if (!res.headersSent) res.status(500).json({ success: false, message: 'Failed to stream file.' })
+  }
+}
+// ...existing code...

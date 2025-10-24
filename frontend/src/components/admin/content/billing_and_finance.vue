@@ -110,12 +110,7 @@ const sortDir = ref('asc')
 
 // Sample invoices
 const invoices = ref([
-  { id: '1', number: 'INV-2025-0012', client: 'Rivera, Kim',    project: 'PR-0007 | Rivera Residence',    amount: 45000, issueDate: new Date(2025, 8, 2),  dueDate: new Date(2025, 8, 16), status: 'pending' },
-  { id: '2', number: 'INV-2025-0011', client: 'Reyes, Maria',   project: 'PR-0005 | Gomez Office',       amount: 82000, issueDate: new Date(2025, 7, 18), dueDate: new Date(2025, 7, 31), status: 'paid',    paidDate: new Date(2025, 8, 3) },
-  { id: '3', number: 'INV-2025-0010', client: 'Dela Cruz, Ana', project: 'PR-0010 | Loyola Townhouse',   amount: 67500, issueDate: new Date(2025, 7, 3),  dueDate: new Date(2025, 7, 17), status: 'overdue' },
-  { id: '4', number: 'INV-2025-0009', client: 'Santos, Juan',   project: 'PR-0003 | Dela Cruz House',    amount: 51000, issueDate: new Date(2025, 8, 5),  dueDate: new Date(2025, 8, 20), status: 'pending' },
-  { id: '5', number: 'INV-2025-0008', client: 'Rivera, Kim',    project: 'PR-0007 | Rivera Residence',    amount: 30000, issueDate: new Date(2025, 8, 9),  dueDate: new Date(2025, 8, 23), status: 'paid',    paidDate: new Date(2025, 8, 12) },
-  { id: '6', number: 'INV-2025-0007', client: 'Reyes, Maria',   project: 'PR-0005 | Gomez Office',       amount: 22000, issueDate: new Date(2025, 6, 25), dueDate: new Date(2025, 7, 9),  status: 'overdue' },
+
 ])
 
 // KPIs

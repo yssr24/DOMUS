@@ -175,16 +175,10 @@ onMounted(() => {
   // Sample seed data
   const now = Date.now()
   notifications.value = [
-    { id: 'n1', type: 'task', title: 'Task assigned', message: 'You were assigned: Submit Design', source: 'Project PR-0007', when: new Date(now - 60 * 60 * 1000), read: false, priority: 'med', link: '#' , dueAt: new Date(now + 36 * 60 * 60 * 1000) },
-    { id: 'n2', type: 'file', title: 'New file uploaded', message: '3D_Render_Lobby.png uploaded by Reyes, Maria', source: 'PR-0005', when: new Date(now - 2 * 60 * 60 * 1000), read: false, priority: 'low', link: '#' },
-    { id: 'n3', type: 'alert', title: 'Overdue task', message: 'Site survey documentation is overdue.', source: 'Tasks', when: new Date(now - 5 * 60 * 60 * 1000), read: false, priority: 'high', link: '#' },
-    { id: 'n4', type: 'message', title: 'New message', message: 'Client replied on design options.', source: 'Client Portal', when: new Date(now - 26 * 60 * 60 * 1000), read: true, priority: 'low', link: '#' },
-    { id: 'n5', type: 'mention', title: 'You were mentioned', message: '@you please review the structural notes.', source: 'Comments', when: new Date(now - 50 * 60 * 60 * 1000), read: false, priority: 'med', link: '#' },
-    { id: 'n6', type: 'system', title: 'System maintenance', message: 'Planned maintenance Saturday 1–2 AM.', source: 'System', when: new Date(now - 3 * 24 * 60 * 60 * 1000), read: true, priority: 'low' },
-    { id: 'n7', type: 'task', title: 'Task status changed', message: 'Schematic Layout moved to Review.', source: 'PR-0010', when: new Date(now - 4 * 24 * 60 * 60 * 1000), read: true, priority: 'low' },
-    { id: 'n8', type: 'file', title: 'Document approved', message: 'Structural_Notes.pdf was approved.', source: 'PR-0003', when: new Date(now - 5 * 24 * 60 * 60 * 1000), read: false, priority: 'low' },
-    { id: 'n9', type: 'message', title: 'Meeting scheduled', message: 'Coordination call set for Friday 3 PM.', source: 'Calendar', when: new Date(now - 6 * 24 * 60 * 60 * 1000), read: true, priority: 'low' },
-    { id: 'n10', type: 'alert', title: 'Permission change', message: 'Project access updated for team.', source: 'Security', when: new Date(now - 7 * 24 * 60 * 60 * 1000), read: false, priority: 'med' },
+    { id: 'n1', type: 'file', title: 'New file uploaded', message: 'letter of Intent uploaded by admin', source: 'PR-0001', when: new Date(now - 2 * 60 * 60 * 1000), read: false, priority: 'low', link: '#' },
+    { id: 'n2', type: 'file', title: 'New file uploaded', message: 'Owner-Architect Design Build Agreement uploaded by admin', source: 'PR-0001', when: new Date(now - 2 * 60 * 60 * 1000), read: false, priority: 'low', link: '#' },
+    { id: 'n3', type: 'file', title: 'New file uploaded', message: 'Annex A uploaded by admin', source: 'PR-0001', when: new Date(now - 2 * 60 * 60 * 1000), read: false, priority: 'low', link: '#' },
+
   ]
 })
 </script>

@@ -131,16 +131,13 @@ const sortDir = ref('desc')
 const sent = ref(false)
 
 const clients = ref([
-  { id: 'c1', name: 'Reyes, Maria', company: 'Reyes Interiors', email: 'maria@email.com', projects: 3, status: 'active', lastActive: new Date() },
-  { id: 'c2', name: 'Santos, Juan', company: 'Santos Dev Co.', email: 'juan@email.com', projects: 1, status: 'inactive', lastActive: new Date(Date.now() - 5*86400000) },
-  { id: 'c3', name: 'Dela Cruz, Ana', company: 'ADC Holdings', email: 'ana@email.com', projects: 2, status: 'active', lastActive: new Date(Date.now() - 2*86400000) },
-  { id: 'c4', name: 'Rivera, Kim', company: 'Rivera Retail', email: 'kim@email.com', projects: 4, status: 'active', lastActive: new Date(Date.now() - 86400000) },
+  { id: 'c1', name: 'Labad, Dianne Clarisse', company: 'DOMUS', email: 'dianelabad01@gmail.com', projects: 1, status: 'active', lastActive: new Date() },
 ])
 
 const recentActivity = ref([
-  { title: 'Uploaded site photos', client: 'Rivera, Kim', when: new Date(Date.now() - 2*3600000) },
-  { title: 'Approved schematic layout', client: 'Reyes, Maria', when: new Date(Date.now() - 86400000) },
-  { title: 'Requested cost estimate', client: 'Dela Cruz, Ana', when: new Date(Date.now() - 2*86400000) },
+  { title: 'Uploaded Letter of Intent file', client: 'Labad, Dianne Clarisse', when: new Date(Date.now() - 2*3600000) },
+  { title: 'Uploaded Owner-Architect Design Build Agreement file', client: 'Labad, Dianne Clarisse', when: new Date(Date.now() - 2*3600000) },
+  { title: 'Uploaded Annex A file', client: 'Labad, Dianne Clarisse', when: new Date(Date.now() - 2*3600000) },
 ])
 
 const totalClients = computed(() => clients.value.length)

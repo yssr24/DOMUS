@@ -105,11 +105,8 @@ const stats = ref({
 })
 
 const users = ref([
-  { id: 1, name: 'Reyes, Maria', email: 'maria@email.com', role: 'Client', status: 'active', joined: '2025-09-10' },
-  { id: 2, name: 'Santos, Juan', email: 'juan@email.com', role: 'Staff', status: 'active', joined: '2025-09-09' },
-  { id: 3, name: 'Dela Cruz, Ana', email: 'ana@email.com', role: 'Client', status: 'inactive', joined: '2025-09-08' },
-  { id: 4, name: 'Cruz, Leo', email: 'leo@email.com', role: 'Staff', status: 'active', joined: '2025-09-07' },
-  { id: 5, name: 'Rivera, Kim', email: 'kim@email.com', role: 'Client', status: 'inactive', joined: '2025-09-06' },
+  { id: 1, name: 'Yasser Pandapatan', email: 'yasserpandapatan@gmail.com', role: 'User', status: 'active', joined: '2025-10-01' },
+  { id: 2, name: 'Dianne Clarisse Labad', email: 'diannelabad01@gmail.com', role: 'Client',  status: 'inactive', joined: '2025-10-02' },
 ])
 
 const userChartOptions = ref({
@@ -118,7 +115,7 @@ const userChartOptions = ref({
   colors: ['#1976d2'],
   dataLabels: { enabled: false },
 })
-const userChartSeries = ref([{ name: 'Users', data: [2, 3, 4, 2, 5, 3, 6] }])
+const userChartSeries = ref([{ name: 'Users', data: [0, 0, 0, 0, 1, 0, 0] }])
 
 const projChartOptions = ref({
   labels: ['Pending', 'Design', 'Review', 'Construction', 'Completed'],
@@ -126,15 +123,15 @@ const projChartOptions = ref({
   legend: { position: 'bottom' },
   dataLabels: { enabled: true },
 })
-const projChartSeries = ref([5, 3, 2, 4, 7])
+const projChartSeries = ref([1, 0, 0, 0, 0])
 
 onMounted(() => {
   // Simulate stats fetch
   stats.value = {
-    totalUsers: 128,
-    activeUsers: 87,
-    totalProjects: 21,
-    totalClients: 42,
+    totalUsers: 1,
+    activeUsers: 1,
+    totalProjects: 1,
+    totalClients: 1,
   }
 })
 
