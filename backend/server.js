@@ -12,6 +12,9 @@ app.use(express.json());
 
 const admin = require("./config/database");
 
+admin.checkStorage?.();
+
+
 
 // User routes
 app.use("/api/users", userRoutes);

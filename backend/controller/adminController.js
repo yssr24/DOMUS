@@ -648,31 +648,26 @@ exports.getDesigns = async (req, res) => {
 // ...existing code...
 
 // List files under "fil/" (no signed URLs; we stream via backend)
-exports.getFiles = async (_req, res) => {
+exports.getFiles = async (req, res) => {
   try {
-    const bucket = require('../config/database').storage().bucket()
-    const prefix = 'files/'
-    const [gcsFiles] = await bucket.getFiles({ prefix })
-
-    const items = []
-    for (const f of gcsFiles) {
-      if (f.name.endsWith('/')) continue
-      const [meta] = await f.getMetadata()
-      const baseName = f.name.substring(f.name.lastIndexOf('/') + 1)
-      items.push({
-        id: f.name,
-        path: f.name,                 // storage path (fil/xxx.pdf)
-        name: baseName,               // show exact filename in table
-        type: meta.contentType || '',
-        size: Number(meta.size) || 0,
-        uploadedAt: meta.updated || meta.timeCreated || null
+    const [files] = await admin.storage().bucket().getFiles({ prefix: 'files/' })
+    const result = files.map(f => ({
+      name: f.name,
+      size: f.metadata?.size,
+      contentType: f.metadata?.contentType,
+      updated: f.metadata?.updated,
+      md5Hash: f.metadata?.md5Hash,
+    }))
+    return res.json({ files: result })
+  } catch (e) {
+    if (e.code === 404 || e?.errors?.[0]?.reason === 'notFound') {
+      return res.status(200).json({
+        files: [],
+        warning: `Storage bucket "${admin.bucketName || 'unknown'}" does not exist. Create it in Firebase Console or set FIREBASE_STORAGE_BUCKET.`,
       })
     }
-    items.sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
-    res.json({ success: true, data: items })
-  } catch (err) {
-    console.error('getFiles error:', err)
-    res.status(500).json({ success: false, message: 'Failed to list files.' })
+    console.error('getFiles error:', e)
+    return res.status(500).json({ error: 'Failed to list files' })
   }
 }
 

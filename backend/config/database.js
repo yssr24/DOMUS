@@ -13,7 +13,7 @@ function parseServiceAccount() {
 const serviceAccount = parseServiceAccount()
 
 let bucket = process.env.FIREBASE_STORAGE_BUCKET || `${serviceAccount.project_id}.appspot.com`
-// Auto-fix common mistake: using the download host instead of the bucket name
+// Auto-fix common mistakes
 if (/firebasestorage\.app/i.test(bucket) || /^https?:\/\//i.test(bucket)) {
   bucket = `${serviceAccount.project_id}.appspot.com`
 }
@@ -25,5 +25,22 @@ if (!admin.apps.length) {
     storageBucket: bucket,
   })
 }
+
+// Optional: check bucket existence at startup (logs a warning, doesn’t crash)
+async function checkStorage() {
+  try {
+    const [exists] = await admin.storage().bucket().exists()
+    if (!exists) {
+      console.warn(`Firebase Storage bucket "${bucket}" does not exist. Create it in Firebase Console or set FIREBASE_STORAGE_BUCKET to the exact bucket name.`)
+    } else {
+      console.log(`Firebase Storage bucket OK: ${bucket}`)
+    }
+  } catch (err) {
+    console.warn('Storage check failed:', err.message)
+  }
+}
+
+admin.bucketName = bucket
+admin.checkStorage = checkStorage
 
 module.exports = admin
