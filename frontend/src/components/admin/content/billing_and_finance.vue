@@ -131,7 +131,7 @@ const overdueAmount = computed(() => invoices.value.filter(i => i.status === 'ov
 
 // Charts
 const months = ['Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep']
-const revSeries = ref([{ name: 'Revenue', data: [95, 102, 88, 110, 120, 98, 105, 130, 115, 125, 90, 138].map(v => v * 1000) }])
+const revSeries = ref([{ name: 'Revenue', data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map(v => v * 1000) }])
 const revOptions = ref({
   chart: { toolbar: { show: false }, sparkline: { enabled: false } },
   xaxis: { categories: months },
