@@ -1,2 +1,2 @@
 export const API_BASE_URL = 'https://domus-production.up.railway.app' // Change to your backend domain in production
-export const FRONTEND_BASE_URL = 'https://domus-2mas.onrender.com' // Change to your frontend domain in productio
+export const FRONTEND_BASE_URL = 'https://www.domus.systems' // Change to your frontend domain in productio
