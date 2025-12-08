@@ -14,14 +14,14 @@ const tempUsers = {}
 
 const resetTokens = {}
 
-// Configure your email transport (use your own credentials)
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-})
+const nodemailerSendgrid = require('nodemailer-sendgrid');
+
+const transporter = nodemailer.createTransport(
+  nodemailerSendgrid({
+    apiKey: process.env.SENDGRID_API_KEY
+  })
+);
+
 
 // Helper to generate code and expiration
 function generateVerification(email, userData) {

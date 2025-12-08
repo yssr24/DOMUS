@@ -7,13 +7,14 @@ const { FRONTEND_BASE_URL } = require('../config/appConfig')
 const crypto = require('crypto')
 
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-})
+const nodemailerSendgrid = require('nodemailer-sendgrid');
+
+const transporter = nodemailer.createTransport(
+  nodemailerSendgrid({
+    apiKey: process.env.SENDGRID_API_KEY
+  })
+);
+
 // Get user counts by role (already exists)
 exports.getUserRoleCounts = async (req, res) => {
   try {
