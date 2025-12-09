@@ -32,6 +32,8 @@ const routes = [
   { path: '/about', component: Homepage, meta: { show: 'about' } },
   { path: '/contact', component: Homepage, meta: { show: 'contact' } },
   { path: '/projects', component: Homepage, meta: { show: 'projects' } },
+    { path: '/projectdetails/:id?', name: 'project-details', component: Homepage, meta: { show: 'projectDetails' } },
+
   { path: '/login', component: Login },
   { path: '/signup', component: SignUp },
   { path: '/verification', component: Verification },
