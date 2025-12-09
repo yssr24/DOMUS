@@ -1,935 +1,564 @@
 <template>
-  <div class="projects-wrap">
-    <header class="projects-header">
-      <div>
-        <p class="eyebrow">Client Projects</p>
-        <h1>Active Engagements</h1>
-        <p class="subtitle">Track timelines, deliverables, and updates for each architectural commission.</p>
-      </div>
-      <button class="refresh-btn" @click="fetchProjects" :disabled="loading">
-        <span v-if="loading" class="spinner"></span>
-        <span v-else>Refresh</span>
-      </button>
-    </header>
+  <section class="projects-wrap">
+    <div class="projects-header">
+      <h1>Projects</h1>
+      <span class="underline"></span>
+    </div>
 
-    <section v-if="loading" class="loading-state">
-      <div class="pulse"></div>
-      <p>Fetching current projects…</p>
-    </section>
-
-    <section v-else-if="!projects.length" class="empty-state">
-      <p>No projects found.</p>
-      <button class="refresh-btn" @click="fetchProjects">Try again</button>
-    </section>
-
-    <section v-else class="projects-list">
+    <div class="projects-list">
       <article
-        v-for="project in projects"
-        :key="project.id"
+        v-for="p in projects"
+        :key="p.id"
         class="project-row"
-        @click="openPanel(project)"
       >
+        <div class="file-icon" aria-hidden="true">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+            <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z" fill="#e6b23a22"/>
+            <path d="M14 2v4a1 1 0 0 0 1 1h4" stroke="#e6b23a" stroke-width="1.5"/>
+            <rect x="7.5" y="12" width="9" height="1.6" rx="0.8" fill="#21354733"/>
+            <rect x="7.5" y="15" width="7" height="1.6" rx="0.8" fill="#21354722"/>
+          </svg>
+        </div>
         <div class="project-main">
-          <div class="project-badge" :style="{ background: project.theme?.chip || '#1a237e' }">{{ project.code }}</div>
-          <div>
-            <h2 class="project-title">{{ project.name }}</h2>
-            <p class="project-description">{{ project.description }}</p>
-            <ul class="project-tags">
-              <li v-for="tag in project.tags" :key="tag">{{ tag }}</li>
-            </ul>
+          <h3 class="project-title">{{ p.title }}</h3>
+          <div class="project-meta">
+            <span class="status-pill" :class="statusClass(p.status)">{{ p.status }}</span>
+            <span class="project-id" v-if="p.code">ID: {{ p.code }}</span>
           </div>
         </div>
-
-        <div class="project-meta">
-          <div>
-            <span class="meta-label">Phase</span>
-            <span class="meta-value">
-              <span :class="statusClass(project.status)">{{ prettyStatus(project.status) }}</span>
-            </span>
-          </div>
-          <div>
-            <span class="meta-label">Schedule</span>
-            <span class="meta-value">{{ formatDate(project.startDate) }} → {{ formatDate(project.dueDate) }}</span>
-          </div>
-          <div>
-            <span class="meta-label">Client</span>
-            <span class="meta-value">{{ project.client }}</span>
-          </div>
-        </div>
-
-        <div class="project-progress">
-          <div class="progress-label">Progress</div>
-          <div class="progress-track">
-            <div class="progress-fill" :style="{ width: project.progress + '%' }"></div>
-          </div>
-          <div class="progress-value">{{ project.progress }}%</div>
+        <div class="project-actions">
+          <button class="view-btn" type="button" @click="openPanel(p)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px">
+              <path d="M12 5c-7 0-10 7-10 7s3 7 10 7s10-7 10-7s-3-7-10-7Zm0 11a4 4 0 1 1 0-8a4 4 0 0 1 0 8Z" fill="currentColor"/>
+            </svg>
+            View
+          </button>
         </div>
       </article>
-    </section>
+      <div v-if="!loading && projects.length === 0" style="text-align:center;color:#aaa;padding:32px 0;">
+        No projects found.
+      </div>
+      <div v-if="loading" style="text-align:center;color:#e6b23a;padding:32px 0;">
+        Loading projects...
+      </div>
+    </div>
 
-    <transition name="slide-in">
-   <aside
-     v-if="showPanel && selectedProject"
-     class="project-panel"
-     :class="{ mobile: isMobile }"
-   >     
-   <div class="panel-body">
-
-        <header class="panel-head">
-          <div>
-            <p class="panel-eyebrow">{{ selectedProject.code }}</p>
-            <h2>{{ selectedProject.name }}</h2>
-            <p>{{ selectedProject.location }}</p>
+    <!-- Side Panel (inside domus-main) -->
+    <transition name="slide-panel">
+      <div
+        v-if="showPanel"
+        class="side-panel-inside"
+        :class="{ mobile: isMobile }"
+        @click.self="closePanel"
+      >
+        <div class="panel-content">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-title">{{ selectedProject.title }}</span>
+              <span class="panel-code" v-if="selectedProject.code">({{ selectedProject.code }})</span>
+            </div>
+            <button class="close-btn" @click="closePanel" aria-label="Close">&times;</button>
           </div>
-          <button class="close-btn" @click="closePanel">✕</button>
-        </header>
-
-        <section class="panel-progress">
-          <div class="panel-progress-circle">
-            <svg viewBox="0 0 120 120">
-              <circle class="trail" cx="60" cy="60" r="54" />
-              <circle
-                class="stroke"
-                cx="60"
-                cy="60"
-                r="54"
-                :style="{ strokeDashoffset: progressOffset }"
-              />
-            </svg>
-            <div class="panel-progress-value">
-              <span>{{ selectedProject.progress }}%</span>
-              <small>{{ prettyStatus(selectedProject.status) }}</small>
+          <div class="panel-section">
+            <label>Status/Phase:</label>
+            <span class="status-pill" :class="statusClass(selectedProject.status)">{{ selectedProject.status }}</span>
+          </div>
+          <div class="panel-section">
+            <label>Timeline:</label>
+            <span>{{ formatDate(selectedProject.createdAt) }}</span>
+          </div>
+          <div class="panel-section" v-if="selectedProject.description">
+            <label>Description:</label>
+            <div class="panel-desc">{{ selectedProject.description }}</div>
+          </div>
+          <div class="panel-section location-section">
+            <label>Location:</label>
+            <div class="location-fields">
+              <div>
+                <span class="loc-label">Province:</span>
+                <span class="loc-value">{{ selectedProject.location?.province || 'N/A' }}</span>
+              </div>
+              <div>
+                <span class="loc-label">City:</span>
+                <span class="loc-value">{{ selectedProject.location?.city || 'N/A' }}</span>
+              </div>
+              <div>
+                <span class="loc-label">Barangay:</span>
+                <span class="loc-value">{{ selectedProject.location?.barangay || 'N/A' }}</span>
+              </div>
+              <div>
+                <span class="loc-label">Zip Code:</span>
+                <span class="loc-value">{{ selectedProject.location?.zip || 'N/A' }}</span>
+              </div>
             </div>
           </div>
-          <ul class="panel-stats">
-            <li>
-              <span class="label">Start</span>
-              <span class="value">{{ formatDate(selectedProject.startDate) }}</span>
-            </li>
-            <li>
-              <span class="label">Turnover</span>
-              <span class="value">{{ formatDate(selectedProject.dueDate) }}</span>
-            </li>
-            <li>
-              <span class="label">Budget</span>
-              <span class="value">{{ selectedProject.budget }}</span>
-            </li>
-            <li>
-              <span class="label">Floor Area</span>
-              <span class="value">{{ selectedProject.area }}</span>
-            </li>
-          </ul>
-        </section>
-
-        <section class="panel-section">
-          <h3>Key Team</h3>
-          <ul class="panel-team">
-            <li>
-              <span class="label">Lead Architect</span>
-              <span class="value">{{ selectedProject.architect }}</span>
-            </li>
-            <li>
-              <span class="label">Project Manager</span>
-              <span class="value">{{ selectedProject.manager }}</span>
-            </li>
-            <li>
-              <span class="label">Client</span>
-              <span class="value">{{ selectedProject.client }} · {{ selectedProject.clientContact }}</span>
-            </li>
-          </ul>
-        </section>
-
-        <section class="panel-section">
-          <h3>Latest Files</h3>
-          <ul class="panel-list">
-            <li v-for="file in panelFiles" :key="file.name">
-              <div>
-                <p class="item-title">{{ file.name }}</p>
-                <p class="item-meta">
-                  Uploaded by {{ file.uploadedBy }} ({{ file.role }}) · {{ formatDate(file.uploadedAt) }} · {{ formatSize(file.size) }}
-                </p>
+          <div class="panel-section" v-if="selectedProject.staffId || selectedProject.leadArchitect">
+            <label>Staff Assigned:</label>
+            <div class="staff-list">
+              <div v-if="selectedProject.leadArchitect">
+                <span class="staff-label">Lead Architect:</span>
+                <span class="staff-value">{{ selectedProject.leadArchitect }}</span>
               </div>
-            </li>
-          </ul>
-        </section>
-
-        <section class="panel-section">
-          <h3>Open Tasks</h3>
-          <ul class="panel-list">
-            <li v-for="task in panelTasks" :key="task.title">
-              <div>
-                <p class="item-title">{{ task.title }}</p>
-                <p class="item-meta">
-                  Assigned to {{ task.assignedTo }} · Due {{ formatDate(task.due) }} · {{ taskStatusLabel(task.status) }}
-                </p>
+              <div v-if="selectedProject.staffId">
+                <span class="staff-label">Staff ID:</span>
+                <span class="staff-value">{{ selectedProject.staffId }}</span>
               </div>
-            </li>
-          </ul>
-        </section>
-     </div>
-
-     <footer class="panel-footer">
-       <button class="open-project-btn" @click="openProject(selectedProject)">
-         Open in Project Workspace
-       </button>
-     </footer>
-      </aside>
+            </div>
+          </div>
+          <div class="panel-actions-inline">
+            <button class="open-btn" @click="openProject(selectedProject)">Open</button>
+          </div>
+        </div>
+      </div>
     </transition>
-
-    <div v-if="showPanel && isMobile" class="panel-backdrop" @click="closePanel"></div>
-  </div>
+  </section>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE_URL } from '../../../config'
 
-
-
 const router = useRouter()
 const projects = ref([])
-const loading = ref(false)
+const loading = ref(true)
 const showPanel = ref(false)
-const selectedProject = ref(null)
-const isMobile = ref(window.innerWidth < 1024)
-
-const demoProjects = createDemoProjects()
-
-const panelFiles = computed(() => (selectedProject.value?.files || []).slice(0, 4))
-const panelTasks = computed(() => (selectedProject.value?.tasks || []).slice(0, 3))
-const progressOffset = computed(() => {
-  const progress = Math.min(Math.max(selectedProject.value?.progress ?? 0, 0), 100)
-  const circumference = 2 * Math.PI * 54
-  return circumference - (progress / 100) * circumference
-})
+const selectedProject = ref({})
+const isMobile = ref(false)
 
 function statusClass(status) {
-  const map = {
-    pending: 'status-pill pending',
-    planning: 'status-pill planning',
-    design: 'status-pill design',
-    review: 'status-pill review',
-    construction: 'status-pill construction',
-    completed: 'status-pill completed'
+  switch ((status || '').toLowerCase()) {
+    case 'pending': return 'pending'
+    case 'planning': return 'planning'
+    case 'design': return 'design'
+    case 'review': return 'review'
+    case 'construction': return 'construction'
+    case 'completed': return 'completed'
+    case 'archived': return 'archived'
+    default: return ''
   }
-  return map[(status || '').toLowerCase()] || 'status-pill pending'
 }
 
-function prettyStatus(status) {
-  return (status || 'pending').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function taskStatusLabel(status) {
-  const labels = {
-    pending: 'Pending',
-    in_progress: 'In Progress',
-    review: 'In Review',
-    completed: 'Completed'
-  }
-  return labels[(status || '').toLowerCase()] || 'Pending'
-}
-
-function formatDate(value) {
-  if (!value) return 'TBD'
-  const date = new Date(value)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function formatSize(bytes) {
-  if (!bytes) return '—'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const idx = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  return `${(bytes / 1024 ** idx).toFixed(idx ? 1 : 0)} ${units[idx]}`
-}
-
-function openPanel(project) {
-  selectedProject.value = project
+function openPanel(p) {
+  selectedProject.value = p
   showPanel.value = true
+  checkMobile()
+  document.body.style.overflow = 'hidden'
 }
-
 function closePanel() {
   showPanel.value = false
+  document.body.style.overflow = ''
 }
-
-function openProject(project) {
-  if (!project) return
-  sessionStorage.setItem('domus:selectedProjectId', project.id || 'selected-project')
-  sessionStorage.setItem('domus:selectedProjectPayload', JSON.stringify(project))
-  router.push({ name: 'project-details', params: { id: project.id || 'selected-project' } })
+function openProject(p) {
+  router.push(`/projects/${encodeURIComponent(p.id || p.code)}`)
+  closePanel()
 }
-
+function formatDate(date) {
+  if (!date) return 'N/A'
+  const d = typeof date === 'string' ? new Date(date) : date
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
 function checkMobile() {
-  isMobile.value = window.innerWidth < 1024
+  isMobile.value = window.innerWidth <= 600
 }
-
-async function fetchProjects() {
+onMounted(async () => {
   loading.value = true
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/user/projects`, { credentials: 'include' })
-    const payload = await response.json().catch(() => ({}))
-    if (response.ok && Array.isArray(payload.data)) {
-      const normalized = payload.data.map((item, index) => normalizeProject(item, index))
-      if (normalized.length) projects.value = normalized
-    }
-  } catch (error) {
-    console.error('Project fetch failed:', error)
-  } finally {
-    if (!projects.value.length) projects.value = demoProjects
+  const userData = localStorage.getItem('domus_user')
+  if (!userData) {
+    projects.value = []
     loading.value = false
+    return
   }
-}
-
-function normalizeProject(raw, index) {
-  const fallback = demoProjects[index % demoProjects.length]
-  const safeFiles = Array.isArray(raw.files)
-    ? raw.files.map((file, idx) => {
-        const base = fallback.files[idx % fallback.files.length]
-        return {
-          name: file.name || base.name,
-          uploadedBy: file.uploadedBy || file.uploader || base.uploadedBy,
-          role: file.role || file.uploaderRole || base.role,
-          uploadedAt: file.uploadedAt || file.createdAt || base.uploadedAt,
-          type: file.type || base.type,
-          size: file.size || base.size
-        }
-      })
-    : fallback.files
-  const safeTasks = Array.isArray(raw.tasks)
-    ? raw.tasks.map((task, idx) => {
-        const base = fallback.tasks[idx % fallback.tasks.length]
-        return {
-          title: task.title || base.title,
-          createdBy: task.createdBy || base.createdBy,
-          assignedTo: task.assignedTo || base.assignedTo,
-          status: task.status || base.status,
-          due: task.due || task.dueDate || base.due,
-          priority: task.priority || base.priority
-        }
-      })
-    : fallback.tasks
-  return {
-    id: raw.id || raw._id || fallback.id,
-    code: raw.code || raw.projectCode || fallback.code,
-    name: raw.name || raw.title || fallback.name,
-    status: raw.status || fallback.status,
-    phase: raw.phase || fallback.phase,
-    progress: Number.isFinite(raw.progress) ? Math.round(raw.progress) : fallback.progress,
-    startDate: raw.startDate || raw.projectStart || fallback.startDate,
-    dueDate: raw.dueDate || raw.projectEnd || fallback.dueDate,
-    client: raw.client?.name || raw.clientName || fallback.client,
-    clientContact: raw.client?.contact || raw.clientContact || fallback.clientContact,
-    location: raw.location || fallback.location,
-    description: raw.description || fallback.description,
-    budget: raw.budget || fallback.budget,
-    area: raw.area || fallback.area,
-    architect: raw.architect || fallback.architect,
-    manager: raw.manager || fallback.manager,
-    tags: raw.tags?.length ? raw.tags : fallback.tags,
-    files: safeFiles,
-    tasks: safeTasks,
-    milestones: raw.milestones?.length ? raw.milestones : fallback.milestones,
-    theme: raw.theme || fallback.theme
-  }
-}
-
-function createDemoProjects() {
-  return [
-    {
-      id: 'villa-alta',
-      code: 'DOMUS-001',
-      name: 'Villa Alta Residence',
-      status: 'construction',
-      phase: 'Superstructure Works',
-      progress: 68,
-      startDate: '2024-05-20',
-      dueDate: '2025-03-30',
-      client: 'Mr. & Mrs. Zamora',
-      clientContact: '+63 917 555 0192',
-      location: 'Barangay Aninuan, Puerto Galera, Oriental Mindoro',
-      description: 'Three-storey tropical modern residence with cantilevered terraces, lap pool, and sea-facing glazing.',
-      budget: '₱18,500,000',
-      area: '412 sqm',
-      architect: 'Ar. Keanu Borbe',
-      manager: 'Ar. Elaine Balay',
-      tags: ['Tropical Modern', 'Residential', 'Premium'],
-      theme: { chip: '#1a237e', gradient: 'linear-gradient(135deg, #1a237e 0%, #03a9f4 70%)' },
-      files: [
-        { name: 'Rear Elevation.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-11-05T09:00:00Z', type: 'pdf', size: 1250000 },
-        { name: "Architect's Perspective.jpg", uploadedBy: 'Keanu Borbe', role: 'Lead Architect', uploadedAt: '2024-11-02T11:00:00Z', type: 'jpg', size: 2450000 },
-        { name: 'Structural Details.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-10-28T15:30:00Z', type: 'pdf', size: 1810000 },
-        { name: 'Materials Schedule.xlsx', uploadedBy: 'Elaine Balay', role: 'Project Manager', uploadedAt: '2024-10-24T08:45:00Z', type: 'xlsx', size: 250000 }
-      ],
-      tasks: [
-        { title: 'Issue AFC structural drawings', createdBy: 'Admin', assignedTo: 'Jc Bautista', status: 'in_progress', due: '2024-12-12', priority: 'high' },
-        { title: 'Coordinate glazing specs with supplier', createdBy: 'Admin', assignedTo: 'Elaine Balay', status: 'pending', due: '2024-12-08', priority: 'medium' },
-        { title: 'Finalize pool waterproofing details', createdBy: 'Admin', assignedTo: 'Keanu Borbe', status: 'review', due: '2024-12-05', priority: 'high' }
-      ],
-      milestones: [
-        { label: 'Concept Sign-off', date: '2024-06-15', done: true },
-        { label: 'Design Development', date: '2024-07-28', done: true },
-        { label: 'Permit Approval', date: '2024-09-10', done: true },
-        { label: 'Structural Shell', date: '2024-12-22', done: false }
-      ]
-    },
-    {
-      id: 'marina-heights',
-      code: 'DOMUS-014',
-      name: 'Marina Heights Condotel',
-      status: 'design',
-      phase: 'Facade Optimization',
-      progress: 42,
-      startDate: '2024-08-05',
-      dueDate: '2025-06-18',
-      client: 'Harborline Hospitality Group',
-      clientContact: '+63 998 441 2210',
-      location: 'Calapan Boulevard, Oriental Mindoro',
-      description: 'Mixed-use condotel with cascading podium gardens, double-height lobby, and rooftop amenities.',
-      budget: '₱285,000,000',
-      area: '18,950 sqm',
-      architect: 'Ar. Keanu Borbe',
-      manager: 'Ar. Elaine Balay',
-      tags: ['High-Rise', 'Hospitality', 'Urban'],
-      theme: { chip: '#0f4c75', gradient: 'linear-gradient(135deg, #0f4c75 0%, #3282b8 70%)' },
-      files: [
-        { name: 'Level 12 Floor Plan.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-11-08T13:15:00Z', type: 'pdf', size: 1930000 },
-        { name: 'Facade Study Set.pptx', uploadedBy: 'Elaine Balay', role: 'Project Manager', uploadedAt: '2024-11-01T10:00:00Z', type: 'pptx', size: 4730000 },
-        { name: "MEP Coordination Matrix.xlsx", uploadedBy: 'Elaine Balay', role: 'Project Manager', uploadedAt: '2024-10-29T16:20:00Z', type: 'xlsx', size: 320000 }
-      ],
-      tasks: [
-        { title: 'Integrate mechanical riser adjustments', createdBy: 'Admin', assignedTo: 'Jc Bautista', status: 'pending', due: '2024-12-14', priority: 'high' },
-        { title: 'Finalize facade shading study', createdBy: 'Admin', assignedTo: 'Elaine Balay', status: 'in_progress', due: '2024-12-09', priority: 'medium' },
-        { title: 'Prepare client presentation boards', createdBy: 'Admin', assignedTo: 'Keanu Borbe', status: 'pending', due: '2024-12-11', priority: 'medium' }
-      ],
-      milestones: [
-        { label: 'Site Analysis', date: '2024-08-22', done: true },
-        { label: 'Concept Alternatives', date: '2024-09-30', done: true },
-        { label: 'Design Review Board', date: '2024-11-18', done: false }
-      ]
-    },
-    {
-      id: 'cove-retreat',
-      code: 'DOMUS-021',
-      name: 'Cove Retreat Villa',
-      status: 'planning',
-      phase: 'Concept Narratives',
-      progress: 18,
-      startDate: '2024-10-01',
-      dueDate: '2025-08-12',
-      client: 'Ms. Lyrna Gayeta',
-      clientContact: '+63 917 880 7744',
-      location: 'Bucayao Cove, Puerto Galera, Oriental Mindoro',
-      description: 'Adaptive reuse of a seaside villa into a boutique retreat with eco-responsive materials and courtyards.',
-      budget: '₱34,800,000',
-      area: '1,250 sqm',
-      architect: 'Ar. Keanu Borbe',
-      manager: 'Ar. Elaine Balay',
-      tags: ['Adaptive Reuse', 'Hospitality', 'Eco-Responsive'],
-      theme: { chip: '#14532d', gradient: 'linear-gradient(135deg, #14532d 0%, #10b981 70%)' },
-      files: [
-        { name: 'Existing Conditions Survey.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-11-03T14:10:00Z', type: 'pdf', size: 1620000 },
-        { name: 'Landscape Mood Board.jpg', uploadedBy: 'Keanu Borbe', role: 'Lead Architect', uploadedAt: '2024-10-28T09:40:00Z', type: 'jpg', size: 1890000 }
-      ],
-      tasks: [
-        { title: 'Compile precedent imagery', createdBy: 'Admin', assignedTo: 'Keanu Borbe', status: 'completed', due: '2024-11-05', priority: 'low' },
-        { title: 'Finalize zoning compliance matrix', createdBy: 'Admin', assignedTo: 'Elaine Balay', status: 'pending', due: '2024-12-20', priority: 'medium' }
-      ],
-      milestones: [
-        { label: 'Site Reconnaissance', date: '2024-10-12', done: true },
-        { label: 'Concept Sketches', date: '2024-11-25', done: false }
-      ]
+  const user = JSON.parse(userData)
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/projects-for-client?email=${encodeURIComponent(user.email)}`)
+    const data = await res.json()
+    if (data.success && Array.isArray(data.projects)) {
+      projects.value = data.projects
+    } else {
+      projects.value = []
     }
-  ]
-}
-
-onMounted(() => {
-  fetchProjects()
+  } catch (err) {
+    projects.value = []
+  }
+  loading.value = false
   window.addEventListener('resize', checkMobile)
 })
-
-onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile)
-})
-const heroStyle = computed(() => ({
-  background: project.value?.theme?.gradient || 'linear-gradient(135deg, #f6d365 0%, #fda085 50%, #ffe9b3 100%)'
-}))
 </script>
 
-<style>
-  .projects-wrap {
-  position: relative;
-  padding: 32px 32px 48px;
-  background: #f7f9fb;
-  min-height: 100vh;
+<style scoped>
+.projects-wrap {
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .projects-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
-  margin-bottom: 28px;
-}
-.eyebrow {
-  font-size: 0.8rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #64748b;
-  margin: 0;
+  width: 100%;
+  max-width: 900px;
+  box-sizing: border-box;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 .projects-header h1 {
-  font-size: 2.4rem;
-  margin: 8px 0;
-  color: #0f172a;
-}
-.subtitle {
   margin: 0;
-  color: #475569;
+  color: #213547;
+  font-size: 1.8rem;
+  letter-spacing: .5px;
 }
-.refresh-btn {
-  align-self: flex-start;
-  padding: 10px 18px;
-  border-radius: 12px;
-  border: none;
-  background: #2563eb;
-  color: white;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 10px 26px rgba(37, 99, 235, 0.25);
+.projects-header .underline {
+  display: block;
+  width: 120px;
+  height: 3px;
+  background: linear-gradient(90deg, #e6b23a, #f1cf6a);
+  border-radius: 4px;
+  margin-top: 8px;
+  box-shadow: 0 2px 8px #e6b23a55;
 }
-.refresh-btn:disabled {
-  background: #94a3b8;
-  cursor: progress;
-  box-shadow: none;
-}
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 3px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-.loading-state,
-.empty-state {
-  background: white;
-  border-radius: 24px;
-  padding: 80px 24px;
-  text-align: center;
-  color: #475569;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
-}
-.loading-state .pulse {
-  width: 42px;
-  height: 42px;
-  margin: 0 auto 16px;
-  border-radius: 50%;
-  background: #2563eb;
-  animation: pulse 1.4s ease-in-out infinite;
-}
+
 .projects-list {
+  margin-top: 18px;
+  width: 100%;
+  max-width: 900px;
+  box-sizing: border-box;
+  padding-left: 16px;
+  padding-right: 16px;
   display: grid;
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
+
 .project-row {
-  background: white;
-  border-radius: 28px;
-  padding: 24px;
-  display: grid;
-  grid-template-columns: 1.2fr 1fr auto;
-  gap: 24px;
+  display: flex;
   align-items: center;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06);
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border 0.25s ease;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.04);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
 .project-row:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.12);
-  border-color: rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+  border-color: #e6b23a55;
+  box-shadow: 0 8px 28px rgba(0,0,0,.06);
 }
+
+.file-icon {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  background: #fff7e1;
+  border: 1px solid #ffe6a6;
+  border-radius: 12px;
+}
+
 .project-main {
-  display: flex;
-  gap: 18px;
-  align-items: flex-start;
-}
-.project-badge {
-  padding: 12px 16px;
-  border-radius: 16px;
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 0.72rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .project-title {
   margin: 0;
-  font-size: 1.4rem;
-  color: #0f172a;
-}
-.project-description {
-  margin: 6px 0 10px;
-  color: #475569;
-}
-.project-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-.project-tags li {
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #334155;
-  font-size: 0.78rem;
-  font-weight: 600;
+  color: #213547;
+  font-size: 1.06rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .project-meta {
-  display: grid;
-  gap: 12px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #667085;
+  font-size: .92rem;
 }
-.meta-label {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #94a3b8;
-  display: block;
-}
-.meta-value {
-  color: #1e293b;
-  font-weight: 600;
-  display: block;
-}
+
 .status-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  font-size: .78rem;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+.status-pill.pending      { color:#b36b00; background:#fff7e1; border-color:#ffe6a6; }
+.status-pill.planning     { color:#8a6b00; background:#fff7e1; border-color:#ffe6a6; }
+.status-pill.design       { color:#0b5da3; background:#e9f3ff; border-color:#cfe6ff; }
+.status-pill.review       { color:#6a0596; background:#f6eaff; border-color:#ead6ff; }
+.status-pill.construction { color:#0b7a3b; background:#e8ffee; border-color:#caf5d9; }
+.status-pill.completed    { color:#1f7a1f; background:#ecfaec; border-color:#cfeccc; }
+.status-pill.archived     { color:#888; background:#f3f3f3; border-color:#ddd; }
+
+.project-id {
+  font-weight: 600;
+  color: #8592a3;
+  font-size: .82rem;
+}
+
+.project-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+.view-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 6px 14px;
-  border-radius: 999px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid #e6b23a;
+  color: #e6b23a;
+  background: #fff;
   font-weight: 700;
-  font-size: 0.76rem;
-  border: 1px solid transparent;
-  text-transform: uppercase;
-}
-.status-pill.pending {
-  background: #fff7e1;
-  border-color: #ffd98f;
-  color: #b36b00;
-}
-.status-pill.planning {
-  background: #f7fee7;
-  border-color: #d9f99d;
-  color: #4d7c0f;
-}
-.status-pill.design {
-  background: #e0f2fe;
-  border-color: #93c5fd;
-  color: #1d4ed8;
-}
-.status-pill.review {
-  background: #fdf4ff;
-  border-color: #f5d0fe;
-  color: #86198f;
-}
-.status-pill.construction {
-  background: #ecfdf5;
-  border-color: #6ee7b7;
-  color: #047857;
-}
-.status-pill.completed {
-  background: #edf7ed;
-  border-color: #c8e6c9;
-  color: #1f7a1f;
-}
-.project-progress {
-  text-align: right;
-}
-.progress-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #94a3b8;
-  margin-bottom: 6px;
-}
-.progress-track {
-  width: 160px;
-  height: 10px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  overflow: hidden;
-  margin-left: auto;
-}
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #2563eb 0%, #38bdf8 100%);
-  border-radius: inherit;
-  transition: width 0.4s ease;
-}
-.progress-value {
-  margin-top: 6px;
-  font-weight: 700;
-  color: #0f172a;
-}
-   .project-panel {
-     position: fixed;
-     top: 0;
-     right: 0;
-     width: min(420px, 100%);
-     height: 100%;
-     display: flex;
-     flex-direction: column;
-     gap: 24px;
-     background: #0f172a;
-     color: white;
-     padding: 36px 32px 28px;
-     overflow: hidden;
-     box-shadow: -28px 0 60px rgba(15, 23, 42, 0.45);
-     z-index: 30;
-   }
-   .project-panel.mobile {
-     padding: 28px 20px 24px;
-   }
-.panel-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  z-index: 25;
-}
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 28px;
-}
-.panel-eyebrow {
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
-}
-.panel-head h2 {
-  margin: 6px 0 4px;
-  font-size: 1.6rem;
-}
-.panel-head p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.75);
-}
-.close-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  border-radius: 999px;
-  width: 36px;
-  height: 36px;
-  color: white;
   cursor: pointer;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .05s ease;
 }
-.panel-progress {
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 24px;
-  padding: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  margin-bottom: 26px;
+.view-btn:hover {
+  background: #e6b23a;
+  color: #fff;
+  box-shadow: 0 6px 16px #e6b23a4d;
 }
-.panel-progress-circle {
-  position: relative;
-  width: 132px;
-  height: 132px;
-  margin: 0 auto 18px;
-}
-.panel-progress-circle svg {
-  width: 132px;
-  height: 132px;
-  transform: rotate(-90deg);
-}
-.panel-progress-circle .trail {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.06);
-  stroke-width: 12;
-}
-.panel-progress-circle .stroke {
-  fill: none;
-  stroke: url(#gradient);
-  stroke: #38bdf8;
-  stroke-width: 12;
-  stroke-linecap: round;
-  stroke-dasharray: 339.292;
-  transition: stroke-dashoffset 0.5s ease;
-}
-.panel-progress-value {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  text-align: center;
-}
-.panel-progress-value span {
-  font-size: 1.8rem;
-  font-weight: 800;
-}
-.panel-progress-value small {
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.68rem;
-  color: rgba(255, 255, 255, 0.7);
-}
-.panel-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px 18px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-.panel-stats .label {
-  display: block;
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-}
-.panel-stats .value {
-  font-weight: 700;
-}
-.panel-section {
-  margin-bottom: 26px;
-}
-.panel-section h3 {
-  margin: 0 0 14px;
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.panel-team {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 12px;
-}
-.panel-team .label {
-  display: block;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.55);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-.panel-team .value {
-  font-weight: 600;
-  color: white;
-}
-.panel-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 18px;
-}
-.panel-list .item-title {
-  margin: 0;
-  font-weight: 600;
-}
-.panel-list .item-meta {
-  margin: 4px 0 0;
-  font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.65);
-}
-.open-project-btn {
-  width: 100%;
-  padding: 14px 18px;
-  border-radius: 16px;
-  border: none;
-  background: linear-gradient(120deg, #2563eb 0%, #38bdf8 100%);
-  font-weight: 700;
-  color: white;
-  cursor: pointer;
-  margin-top: 6px;
-  box-shadow: 0 14px 40px rgba(56, 189, 248, 0.35);
-}
-.slide-in-enter-active,
-.slide-in-leave-active {
-  transition: transform 0.3s ease;
-}
-.slide-in-enter-from,
-.slide-in-leave-to {
-  transform: translateX(100%);
-}
+.view-btn:active { transform: translateY(1px); }
 
-   .panel-body {
-     flex: 1;
-     overflow-y: auto;
-     padding-right: 4px;
-     display: flex;
-     flex-direction: column;
-     gap: 26px;
-   }
-   .panel-footer {
-     position: sticky;
-     bottom: 0;
-     margin: 0 -32px;
-     padding: 18px 32px 0;
-     background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.92) 40%, #0f172a 100%);
-   }
-   .project-panel.mobile .panel-footer {
-     margin: 0 -20px;
-     padding: 16px 20px 0;
-   }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+/* Responsive */
+@media (max-width: 1100px) {
+  .projects-header,
+  .projects-list {
+    max-width: 98vw;
   }
 }
-@keyframes pulse {
-  0%, 100% { transform: scale(0.85); opacity: 0.4; }
-  50% { transform: scale(1); opacity: 1; }
-}
-
-@media (max-width: 1280px) {
+@media (max-width: 600px) {
+  .projects-header,
+  .projects-list {
+    max-width: 100vw;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
   .project-row {
-    grid-template-columns: 1fr;
+    padding: 10px 6px;
+    gap: 10px;
+    border-radius: 9px;
   }
-  .project-progress {
-    text-align: left;
+  .file-icon {
+    width: 40px; height: 40px; flex-basis: 40px;
   }
-  .progress-track {
-    margin-left: 0;
-  }
+  .project-title { font-size: .98rem; }
+  .project-meta { flex-wrap: wrap; gap: 6px; }
 }
-@media (max-width: 960px) {
-  .projects-wrap {
-    padding: 24px 18px 36px;
+@media (max-width: 400px) {
+  .projects-header,
+  .projects-list {
+    max-width: 380px;
+    min-width: 0;
+    padding-left: 2px;
+    padding-right: 2px;
   }
-  .projects-header {
+  .project-row {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
+    padding: 8px 2px;
   }
-  .refresh-btn {
+  .project-actions {
+    margin-left: 0;
     width: 100%;
-    justify-content: center;
-  }
-  .project-row {
-    padding: 20px;
+    justify-content: flex-end;
   }
 }
-   @media (max-width: 600px) {
-     .panel-progress-circle {
-       width: 112px;
-       height: 112px;
-     }
-     .panel-progress-circle svg {
-       width: 112px;
-       height: 112px;
-     }
-   }
+.slide-panel-enter-active, .slide-panel-leave-active {
+  transition: right 0.3s cubic-bezier(.4,0,.2,1), width 0.3s cubic-bezier(.4,0,.2,1);
+}
+.slide-panel-enter-from, .slide-panel-leave-to {
+  right: -100vw;
+}
+.slide-panel-enter-to, .slide-panel-leave-from {
+  right: 0;
+}
+
+/* Side panel inside domus-main */
+.side-panel-inside {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 420px;
+  max-width: 100vw;
+  background: #fff;
+  box-shadow: -4px 0 32px #0002;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+  animation: slideIn .3s;
+}
+@keyframes slideIn {
+  from { right: -100vw; }
+  to { right: 0; }
+}
+.side-panel-inside.mobile {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  left: 0;
+  right: 0;
+  border-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.panel-content {
+  padding: 28px 24px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.panel-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.panel-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #213547;
+  line-height: 1.2;
+}
+.panel-code {
+  font-size: 1rem;
+  color: #e6b23a;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.close-btn {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  font-size: 2rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 8px;
+  transition: color .15s;
+}
+.close-btn:hover { color: #b71c1c; }
+.panel-section {
+  margin-bottom: 18px;
+}
+.panel-section label {
+  display: block;
+  font-size: .98rem;
+  color: #888;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+.panel-desc {
+  color: #213547;
+  font-size: 1rem;
+  background: #f7f7f7;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 2px;
+}
+.location-section .location-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 18px;
+  margin-top: 4px;
+}
+.loc-label {
+  color: #888;
+  font-size: .95rem;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.loc-value {
+  color: #213547;
+  font-size: .98rem;
+  font-weight: 500;
+}
+.staff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.staff-label {
+  color: #888;
+  font-size: .95rem;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.staff-value {
+  color: #213547;
+  font-size: .98rem;
+  font-weight: 500;
+}
+.panel-actions-vertical {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
+}
+.panel-actions-inline {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 0;
+  margin-bottom: 0;
+  gap: 0;
+}
+.open-btn {
+  background: #e6b23a;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 10px 28px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background .15s;
+  margin-top: 0;
+  margin-bottom: 0;
+  width: auto;
+}
+.open-btn:hover { background: #c4901a; }
+
+@media (max-width: 900px) {
+  .side-panel-inside {
+    width: 340px;
+  }
+}
+@media (max-width: 600px) {
+  .side-panel-inside,
+  .side-panel-inside.mobile {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+  }
+  .panel-content {
+    padding: 18px 8px 12px 8px;
+  }
+  .panel-title { font-size: 1.1rem; }
+  .location-section .location-fields {
+    grid-template-columns: 1fr;
+    gap: 6px 0;
+  }
+}
 </style>
