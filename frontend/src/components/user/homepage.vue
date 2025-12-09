@@ -5,6 +5,8 @@ import HomeContent from './content/Home.vue'
 import AboutContent from './content/About.vue'
 import ContactContent from './content/Contact.vue'
 import ProjectContent from './client/Project.vue'
+import ProjectDetails from './client/ProjectDetails.vue'  
+
 import { API_BASE_URL } from '../../config'
 
 import '/public/css/user/user.css'
