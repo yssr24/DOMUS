@@ -1,21 +1,62 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 const name = ref('')
 const email = ref('')
 const message = ref('')
 const sent = ref(false)
+const defaultName = ref('')
+
+const storageKeys = ['domusUser', 'user', 'authUser']
+
+function resolveStoredUserName() {
+  if (typeof window === 'undefined') return ''
+  for (const key of storageKeys) {
+    const raw = window.localStorage?.getItem(key)
+    if (!raw) continue
+    try {
+      const parsed = JSON.parse(raw)
+      const resolved =
+        [parsed.firstname, parsed.lastname].filter(Boolean).join(' ') ||
+        parsed.name ||
+        ''
+      if (resolved) return resolved
+    } catch {
+      if (raw.trim()) return raw
+    }
+  }
+  return ''
+}
+
+function applyStoredName() {
+  const resolved = resolveStoredUserName()
+  defaultName.value = resolved
+  name.value = resolved
+}
+
+function handleStorageChange(event) {
+  if (!event.key || storageKeys.includes(event.key)) {
+    applyStoredName()
+  }
+}
+
+onMounted(() => {
+  applyStoredName()
+  window.addEventListener('storage', handleStorageChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('storage', handleStorageChange)
+})
 
 function submitForm() {
-  // Template-only behavior
   sent.value = true
   setTimeout(() => (sent.value = false), 2500)
-  name.value = ''
   email.value = ''
   message.value = ''
+  name.value = defaultName.value
 }
 </script>
-
 <template>
   <section class="contact">
     <header class="header">
