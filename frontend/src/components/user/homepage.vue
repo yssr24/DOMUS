@@ -145,6 +145,8 @@ watch(
           ? AboutContent
           : currentContent === 'contact'
           ? ContactContent
+          : currentContent === 'projectDetails'
+          ? ProjectDetails
           : currentContent === 'project'
           ? (user && user.role === 'client' ? ProjectContent : HomeContent)
           : HomeContent"
