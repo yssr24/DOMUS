@@ -1,564 +1,204 @@
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const name = ref('')
+const email = ref('')
+const message = ref('')
+const sent = ref(false)
+const isLoggedIn = ref(false)
+
+onMounted(() => {
+  const userData = localStorage.getItem('domus_user')
+  if (userData) {
+    const user = JSON.parse(userData)
+    isLoggedIn.value = true
+    // Pre-fill name and email from logged-in user
+    name.value = [user.firstname, user.lastname].filter(Boolean).join(' ')
+    email.value = user.email || ''
+  }
+})
+
+function submitForm() {
+  sent.value = true
+  setTimeout(() => (sent.value = false), 2500)
+  // Only clear message, keep name/email if logged in
+  message.value = ''
+  if (!isLoggedIn.value) {
+    name.value = ''
+    email.value = ''
+  }
+}
+</script>
+
 <template>
-  <section class="projects-wrap">
-    <div class="projects-header">
-      <h1>Projects</h1>
-      <span class="underline"></span>
-    </div>
+  <section class="contact">
+    <header class="header">
+      <h1>Contact Us</h1>
+      <p>Questions or ready to start? DOMUS is here to help.</p>
+    </header>
 
-    <div class="projects-list">
-      <article
-        v-for="p in projects"
-        :key="p.id"
-        class="project-row"
-      >
-        <div class="file-icon" aria-hidden="true">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-            <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z" fill="#e6b23a22"/>
-            <path d="M14 2v4a1 1 0 0 0 1 1h4" stroke="#e6b23a" stroke-width="1.5"/>
-            <rect x="7.5" y="12" width="9" height="1.6" rx="0.8" fill="#21354733"/>
-            <rect x="7.5" y="15" width="7" height="1.6" rx="0.8" fill="#21354722"/>
-          </svg>
-        </div>
-        <div class="project-main">
-          <h3 class="project-title">{{ p.title }}</h3>
-          <div class="project-meta">
-            <span class="status-pill" :class="statusClass(p.status)">{{ p.status }}</span>
-            <span class="project-id" v-if="p.code">ID: {{ p.code }}</span>
+    <div class="grid">
+      <!-- Contact cards -->
+      <div class="cards">
+        <div class="card">
+          <span class="icon">
+            <svg viewBox="0 0 24 24"><path d="M4 6l8 6 8-6" stroke="#fff" stroke-width="2" fill="none"/><rect x="3" y="4" width="18" height="16" rx="2" fill="#1976d2"/></svg>
+          </span>
+          <div class="info">
+            <h3>Email</h3>
+            <a href="mailto:domus.architecture@email.com">domus.architecture@email.com</a>
           </div>
         </div>
-        <div class="project-actions">
-          <button class="view-btn" type="button" @click="openPanel(p)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px">
-              <path d="M12 5c-7 0-10 7-10 7s3 7 10 7s10-7 10-7s-3-7-10-7Zm0 11a4 4 0 1 1 0-8a4 4 0 0 1 0 8Z" fill="currentColor"/>
-            </svg>
-            View
-          </button>
-        </div>
-      </article>
-      <div v-if="!loading && projects.length === 0" style="text-align:center;color:#aaa;padding:32px 0;">
-        No projects found.
-      </div>
-      <div v-if="loading" style="text-align:center;color:#e6b23a;padding:32px 0;">
-        Loading projects...
-      </div>
-    </div>
 
-    <!-- Side Panel (inside domus-main) -->
-    <transition name="slide-panel">
-      <div
-        v-if="showPanel"
-        class="side-panel-inside"
-        :class="{ mobile: isMobile }"
-        @click.self="closePanel"
-      >
-        <div class="panel-content">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <span class="panel-title">{{ selectedProject.title }}</span>
-              <span class="panel-code" v-if="selectedProject.code">({{ selectedProject.code }})</span>
-            </div>
-            <button class="close-btn" @click="closePanel" aria-label="Close">&times;</button>
+        <div class="card">
+          <span class="icon">
+            <svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 006.6 6.6l2.2-2.2a1.5 1.5 0 011.5-.36 9.7 9.7 0 003.1.5 1.5 1.5 0 011.5 1.5V20a2 2 0 01-2 2A18 18 0 012 6a2 2 0 012-2h3.2a1.5 1.5 0 011.5 1.5 9.7 9.7 0 00.5 3.1 1.5 1.5 0 01-.36 1.5L6.6 10.8z" fill="#43a047"/></svg>
+          </span>
+          <div class="info">
+            <h3>Phone</h3>
+            <a href="tel:+639123456789">+63 912 345 6789</a>
           </div>
-          <div class="panel-section">
-            <label>Status/Phase:</label>
-            <span class="status-pill" :class="statusClass(selectedProject.status)">{{ selectedProject.status }}</span>
-          </div>
-          <div class="panel-section">
-            <label>Timeline:</label>
-            <span>{{ formatDate(selectedProject.createdAt) }}</span>
-          </div>
-          <div class="panel-section" v-if="selectedProject.description">
-            <label>Description:</label>
-            <div class="panel-desc">{{ selectedProject.description }}</div>
-          </div>
-          <div class="panel-section location-section">
-            <label>Location:</label>
-            <div class="location-fields">
-              <div>
-                <span class="loc-label">Province:</span>
-                <span class="loc-value">{{ selectedProject.location?.province || 'N/A' }}</span>
-              </div>
-              <div>
-                <span class="loc-label">City:</span>
-                <span class="loc-value">{{ selectedProject.location?.city || 'N/A' }}</span>
-              </div>
-              <div>
-                <span class="loc-label">Barangay:</span>
-                <span class="loc-value">{{ selectedProject.location?.barangay || 'N/A' }}</span>
-              </div>
-              <div>
-                <span class="loc-label">Zip Code:</span>
-                <span class="loc-value">{{ selectedProject.location?.zip || 'N/A' }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="panel-section" v-if="selectedProject.staffId || selectedProject.leadArchitect">
-            <label>Staff Assigned:</label>
-            <div class="staff-list">
-              <div v-if="selectedProject.leadArchitect">
-                <span class="staff-label">Lead Architect:</span>
-                <span class="staff-value">{{ selectedProject.leadArchitect }}</span>
-              </div>
-              <div v-if="selectedProject.staffId">
-                <span class="staff-label">Staff ID:</span>
-                <span class="staff-value">{{ selectedProject.staffId }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="panel-actions-inline">
-            <button class="open-btn" @click="openProject(selectedProject)">Open</button>
+        </div>
+
+        <div class="card">
+          <span class="icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 00-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 00-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" fill="#e6b23a"/></svg>
+          </span>
+          <div class="info">
+            <h3>Location</h3>
+            <p>123 Main St, Mindoro, Philippines</p>
           </div>
         </div>
       </div>
-    </transition>
+
+      <!-- Contact form -->
+      <form class="form" @submit.prevent="submitForm">
+        <h2>Send a Message</h2>
+        <div class="row">
+          <div class="field">
+            <label>Name</label>
+            <input 
+              v-model="name" 
+              type="text" 
+              placeholder="Your name" 
+              required 
+              :readonly="isLoggedIn"
+              :class="{ 'readonly-input': isLoggedIn }"
+            />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input 
+              v-model="email" 
+              type="email" 
+              placeholder="you@email.com" 
+              required 
+              :readonly="isLoggedIn"
+              :class="{ 'readonly-input': isLoggedIn }"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Message</label>
+          <textarea v-model="message" rows="5" placeholder="How can we help?" required></textarea>
+        </div>
+
+        <button class="send" type="submit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+          Send
+        </button>
+
+        <p v-if="sent" class="sent">Thanks! We'll get back shortly.</p>
+      </form>
+    </div>
   </section>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { API_BASE_URL } from '../../../config'
-
-const router = useRouter()
-const projects = ref([])
-const loading = ref(true)
-const showPanel = ref(false)
-const selectedProject = ref({})
-const isMobile = ref(false)
-
-function statusClass(status) {
-  switch ((status || '').toLowerCase()) {
-    case 'pending': return 'pending'
-    case 'planning': return 'planning'
-    case 'design': return 'design'
-    case 'review': return 'review'
-    case 'construction': return 'construction'
-    case 'completed': return 'completed'
-    case 'archived': return 'archived'
-    default: return ''
-  }
-}
-
-function openPanel(p) {
-  selectedProject.value = p
-  showPanel.value = true
-  checkMobile()
-  document.body.style.overflow = 'hidden'
-}
-function closePanel() {
-  showPanel.value = false
-  document.body.style.overflow = ''
-}
-function openProject(p) {
-  router.push(`/projects/${encodeURIComponent(p.id || p.code)}`)
-  closePanel()
-}
-function formatDate(date) {
-  if (!date) return 'N/A'
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
-function checkMobile() {
-  isMobile.value = window.innerWidth <= 600
-}
-onMounted(async () => {
-  loading.value = true
-  const userData = localStorage.getItem('domus_user')
-  if (!userData) {
-    projects.value = []
-    loading.value = false
-    return
-  }
-  const user = JSON.parse(userData)
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/projects-for-client?email=${encodeURIComponent(user.email)}`)
-    const data = await res.json()
-    if (data.success && Array.isArray(data.projects)) {
-      projects.value = data.projects
-    } else {
-      projects.value = []
-    }
-  } catch (err) {
-    projects.value = []
-  }
-  loading.value = false
-  window.addEventListener('resize', checkMobile)
-})
-</script>
-
 <style scoped>
-.projects-wrap {
-  padding: 24px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* ...existing code... */
+.contact {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px;
 }
-.projects-header {
-  width: 100%;
-  max-width: 900px;
-  box-sizing: border-box;
-  padding-left: 16px;
-  padding-right: 16px;
-}
-.projects-header h1 {
-  margin: 0;
-  color: #213547;
-  font-size: 1.8rem;
-  letter-spacing: .5px;
-}
-.projects-header .underline {
-  display: block;
-  width: 120px;
-  height: 3px;
-  background: linear-gradient(90deg, #e6b23a, #f1cf6a);
-  border-radius: 4px;
-  margin-top: 8px;
-  box-shadow: 0 2px 8px #e6b23a55;
+.header { text-align: center; margin-bottom: 10px; }
+.header h1 { margin: 0; color: #213547; }
+.header p { color: #5a6675; }
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap: 18px;
 }
 
-.projects-list {
-  margin-top: 18px;
-  width: 100%;
-  max-width: 900px;
-  box-sizing: border-box;
-  padding-left: 16px;
-  padding-right: 16px;
+.cards {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
 }
-
-.project-row {
+.card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  background: #fff;
-  border: 1px solid #ececec;
-  border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 18px rgba(0,0,0,.04);
-  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-}
-.project-row:hover {
-  transform: translateY(-1px);
-  border-color: #e6b23a55;
-  box-shadow: 0 8px 28px rgba(0,0,0,.06);
-}
-
-.file-icon {
-  flex: 0 0 56px;
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  background: #fff7e1;
-  border: 1px solid #ffe6a6;
-  border-radius: 12px;
-}
-
-.project-main {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.project-title {
-  margin: 0;
-  color: #213547;
-  font-size: 1.06rem;
-  font-weight: 700;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.project-meta {
-  margin-top: 6px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #667085;
-  font-size: .92rem;
-}
-
-.status-pill {
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-weight: 700;
-  letter-spacing: .2px;
-  font-size: .78rem;
-  text-transform: uppercase;
-  border: 1px solid transparent;
-}
-.status-pill.pending      { color:#b36b00; background:#fff7e1; border-color:#ffe6a6; }
-.status-pill.planning     { color:#8a6b00; background:#fff7e1; border-color:#ffe6a6; }
-.status-pill.design       { color:#0b5da3; background:#e9f3ff; border-color:#cfe6ff; }
-.status-pill.review       { color:#6a0596; background:#f6eaff; border-color:#ead6ff; }
-.status-pill.construction { color:#0b7a3b; background:#e8ffee; border-color:#caf5d9; }
-.status-pill.completed    { color:#1f7a1f; background:#ecfaec; border-color:#cfeccc; }
-.status-pill.archived     { color:#888; background:#f3f3f3; border-color:#ddd; }
-
-.project-id {
-  font-weight: 600;
-  color: #8592a3;
-  font-size: .82rem;
-}
-
-.project-actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-}
-.view-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 9px;
-  border: 1px solid #e6b23a;
-  color: #e6b23a;
-  background: #fff;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .05s ease;
-}
-.view-btn:hover {
-  background: #e6b23a;
-  color: #fff;
-  box-shadow: 0 6px 16px #e6b23a4d;
-}
-.view-btn:active { transform: translateY(1px); }
-
-/* Responsive */
-@media (max-width: 1100px) {
-  .projects-header,
-  .projects-list {
-    max-width: 98vw;
-  }
-}
-@media (max-width: 600px) {
-  .projects-header,
-  .projects-list {
-    max-width: 100vw;
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-  .project-row {
-    padding: 10px 6px;
-    gap: 10px;
-    border-radius: 9px;
-  }
-  .file-icon {
-    width: 40px; height: 40px; flex-basis: 40px;
-  }
-  .project-title { font-size: .98rem; }
-  .project-meta { flex-wrap: wrap; gap: 6px; }
-}
-@media (max-width: 400px) {
-  .projects-header,
-  .projects-list {
-    max-width: 380px;
-    min-width: 0;
-    padding-left: 2px;
-    padding-right: 2px;
-  }
-  .project-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 2px;
-  }
-  .project-actions {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
-.slide-panel-enter-active, .slide-panel-leave-active {
-  transition: right 0.3s cubic-bezier(.4,0,.2,1), width 0.3s cubic-bezier(.4,0,.2,1);
-}
-.slide-panel-enter-from, .slide-panel-leave-to {
-  right: -100vw;
-}
-.slide-panel-enter-to, .slide-panel-leave-from {
-  right: 0;
-}
-
-/* Side panel inside domus-main */
-.side-panel-inside {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  width: 420px;
-  max-width: 100vw;
-  background: #fff;
-  box-shadow: -4px 0 32px #0002;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  border-top-right-radius: 12px;
-  border-bottom-right-radius: 12px;
-  animation: slideIn .3s;
-}
-@keyframes slideIn {
-  from { right: -100vw; }
-  to { right: 0; }
-}
-.side-panel-inside.mobile {
-  width: 100vw !important;
-  max-width: 100vw !important;
-  left: 0;
-  right: 0;
-  border-radius: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.panel-content {
-  padding: 28px 24px 18px 24px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow-y: auto;
-}
-.panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px #00000010;
+  padding: 14px;
 }
-.panel-title-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.icon {
+  width: 52px; height: 52px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: #f8f8f8; box-shadow: inset 0 0 0 1px #eee;
 }
-.panel-title {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #213547;
-  line-height: 1.2;
+.icon svg { width: 28px; height: 28px; }
+.info h3 { margin: 0 0 4px; color: #213547; }
+.info a, .info p { color: #5a6675; text-decoration: none; }
+
+.form {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px #00000010;
+  padding: 16px;
 }
-.panel-code {
-  font-size: 1rem;
-  color: #e6b23a;
-  font-weight: 600;
-  margin-top: 2px;
-}
-.close-btn {
-  background: none;
-  border: none;
-  color: #e74c3c;
-  font-size: 2rem;
-  font-weight: 700;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0 8px;
-  transition: color .15s;
-}
-.close-btn:hover { color: #b71c1c; }
-.panel-section {
-  margin-bottom: 18px;
-}
-.panel-section label {
-  display: block;
-  font-size: .98rem;
-  color: #888;
-  margin-bottom: 2px;
-  font-weight: 600;
-}
-.panel-desc {
-  color: #213547;
-  font-size: 1rem;
-  background: #f7f7f7;
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-top: 2px;
-}
-.location-section .location-fields {
+.form h2 { margin: 0 0 10px; color: #213547; }
+
+.row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 18px;
-  margin-top: 4px;
+  gap: 12px;
 }
-.loc-label {
-  color: #888;
-  font-size: .95rem;
-  font-weight: 600;
-  margin-right: 4px;
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+label { font-weight: 600; color: #213547; }
+input, textarea {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
 }
-.loc-value {
-  color: #213547;
-  font-size: .98rem;
-  font-weight: 500;
-}
-.staff-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.staff-label {
-  color: #888;
-  font-size: .95rem;
-  font-weight: 600;
-  margin-right: 4px;
-}
-.staff-value {
-  color: #213547;
-  font-size: .98rem;
-  font-weight: 500;
-}
-.panel-actions-vertical {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  align-items: stretch;
-}
-.panel-actions-inline {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  margin-top: 0;
-  margin-bottom: 0;
-  gap: 0;
-}
-.open-btn {
-  background: #e6b23a;
-  color: #fff;
-  border: none;
-  border-radius: 7px;
-  padding: 10px 28px;
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background .15s;
-  margin-top: 0;
-  margin-bottom: 0;
-  width: auto;
-}
-.open-btn:hover { background: #c4901a; }
+input:focus, textarea:focus { border-color: #e6b23a; }
 
-@media (max-width: 900px) {
-  .side-panel-inside {
-    width: 340px;
-  }
+/* Readonly style for logged-in user fields */
+.readonly-input {
+  background: #f5f5f5;
+  color: #555;
+  cursor: not-allowed;
 }
-@media (max-width: 600px) {
-  .side-panel-inside,
-  .side-panel-inside.mobile {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    left: 0;
-    right: 0;
-    border-radius: 0;
-  }
-  .panel-content {
-    padding: 18px 8px 12px 8px;
-  }
-  .panel-title { font-size: 1.1rem; }
-  .location-section .location-fields {
-    grid-template-columns: 1fr;
-    gap: 6px 0;
-  }
+
+.send {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #1976d2; color: #fff; border: none;
+  border-radius: 10px; padding: 10px 16px; font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px #1976d244;
+}
+.sent { color: #2e7d32; margin-top: 8px; font-weight: 600; }
+
+/* Responsive */
+@media (max-width: 920px) {
+  .grid { grid-template-columns: 1fr; }
 }
 </style>

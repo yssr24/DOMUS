@@ -711,4 +711,101 @@ exports.streamFile = async (req, res) => {
     if (!res.headersSent) res.status(500).json({ success: false, message: 'Failed to stream file.' })
   }
 }
+
+// ...existing code...
+
+// Handle contact form submission
+exports.submitContactMessage = async (req, res) => {
+  try {
+    const { name, email, message, senderId } = req.body
+
+    if (!name || !email || !message) {
+      return res.status(400).json({ success: false, message: 'Name, email, and message are required.' })
+    }
+
+    // Save to Firestore messages collection
+    const messageData = {
+      projectId: null,
+      senderId: senderId || null,
+      senderName: name,
+      senderEmail: email, // User's email saved in database
+      receiverId: 'admin',
+      text: message,
+      files: [],
+      type: 'contact',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      read: false
+    }
+
+    const docRef = await admin.firestore().collection('messages').add(messageData)
+
+    // Send email notification to DOMUS
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+          .container { max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); padding: 32px; }
+          .logo { display: flex; align-items: center; justify-content: center; margin-bottom: 24px; }
+          .logo img { width: 48px; height: 48px; margin-right: 12px; }
+          .logo-text { font-size: 1.8rem; font-weight: 700; color: #e6b23a; letter-spacing: 2px; }
+          h2 { text-align: center; color: #213547; margin-bottom: 24px; }
+          .info { background: #f9f6f2; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+          .info-row { margin-bottom: 10px; }
+          .label { font-weight: 600; color: #5a6675; }
+          .value { color: #213547; }
+          .email-link { color: #1976d2; text-decoration: none; }
+          .email-link:hover { text-decoration: underline; }
+          .message-box { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; margin-top: 16px; }
+          .footer { text-align: center; color: #888; font-size: 0.9rem; margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; }
+          .reply-note { background: #e3f2fd; border-radius: 8px; padding: 12px; margin-top: 16px; text-align: center; }
+          .reply-note a { color: #1976d2; font-weight: 600; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="logo">
+            <img src="https://firebasestorage.googleapis.com/v0/b/dts-capstone.firebasestorage.app/o/img%2Fdomus.png?alt=media&token=c374d8fd-0bb7-4747-99d6-2f1938bc68cc" alt="DOMUS">
+            <span class="logo-text">DOMUS</span>
+          </div>
+          <h2>New Contact Form Submission</h2>
+          <div class="info">
+            <div class="info-row">
+              <span class="label">From:</span>
+              <span class="value">${name}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Email:</span>
+              <a href="mailto:${email}" class="email-link">${email}</a>
+            </div>
+          </div>
+          <div class="message-box">
+            <div class="label" style="margin-bottom: 8px;">Message:</div>
+            <p style="color: #213547; margin: 0; white-space: pre-wrap;">${message}</p>
+          </div>
+          <div class="reply-note">
+            <p style="margin: 0;">To reply to this message, click: <a href="mailto:${email}?subject=Re: DOMUS Contact Form">${email}</a></p>
+          </div>
+          <div class="footer">
+            This message was sent via the DOMUS website contact form.
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+
+    await transporter.sendMail({
+      from: `"DOMUS Architecture" <${process.env.EMAIL_FROM}>`, // SendGrid verified sender
+      to: 'domus.architecture92@gmail.com',
+      subject: `New Contact Form Message from ${name} (${email})`,
+      html: emailHtml
+    })
+
+    res.json({ success: true, messageId: docRef.id, message: 'Message sent successfully!' })
+  } catch (err) {
+    console.error('Contact form error:', err)
+    res.status(500).json({ success: false, message: 'Failed to send message.' })
+  }
+}
 // ...existing code...

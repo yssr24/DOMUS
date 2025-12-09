@@ -1,64 +1,87 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted } from 'vue'
+import { API_BASE_URL } from '../../../config'
 
 const name = ref('')
 const email = ref('')
 const message = ref('')
 const sent = ref(false)
-const defaultName = ref('')
-
-const storageKeys = ['domusUser', 'user', 'authUser']
-
-function resolveStoredUserName() {
-  if (typeof window === 'undefined') return ''
-  for (const key of storageKeys) {
-    const raw = window.localStorage?.getItem(key)
-    if (!raw) continue
-    try {
-      const parsed = JSON.parse(raw)
-      const resolved =
-        [parsed.firstname, parsed.lastname].filter(Boolean).join(' ') ||
-        parsed.name ||
-        ''
-      if (resolved) return resolved
-    } catch {
-      if (raw.trim()) return raw
-    }
-  }
-  return ''
-}
-
-function applyStoredName() {
-  const resolved = resolveStoredUserName()
-  defaultName.value = resolved
-  name.value = resolved
-}
-
-function handleStorageChange(event) {
-  if (!event.key || storageKeys.includes(event.key)) {
-    applyStoredName()
-  }
-}
+const sending = ref(false)
+const isLoggedIn = ref(false)
+const userId = ref(null)
+const alertMsg = ref('')
+const alertType = ref('success')
 
 onMounted(() => {
-  applyStoredName()
-  window.addEventListener('storage', handleStorageChange)
+  const userData = localStorage.getItem('domus_user')
+  if (userData) {
+    const user = JSON.parse(userData)
+    isLoggedIn.value = true
+    userId.value = user.id || user.docId || null
+    // Pre-fill name and email from logged-in user
+    name.value = [user.firstname, user.lastname].filter(Boolean).join(' ')
+    email.value = user.email || ''
+  }
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('storage', handleStorageChange)
-})
+function showAlert(msg, type = 'success') {
+  alertMsg.value = msg
+  alertType.value = type
+  setTimeout(() => {
+    alertMsg.value = ''
+  }, 4000)
+}
 
-function submitForm() {
-  sent.value = true
-  setTimeout(() => (sent.value = false), 2500)
-  email.value = ''
-  message.value = ''
-  name.value = defaultName.value
+async function submitForm() {
+  if (!name.value.trim() || !email.value.trim() || !message.value.trim()) {
+    showAlert('Please fill in all required fields.', 'error')
+    return
+  }
+
+  sending.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/contact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.value,
+        email: email.value,
+        message: message.value,
+        senderId: userId.value
+      })
+    })
+
+    const result = await res.json()
+
+    if (result.success) {
+      sent.value = true
+      showAlert('Message sent successfully! We\'ll get back to you shortly.', 'success')
+      setTimeout(() => (sent.value = false), 3000)
+      // Only clear message, keep name/email if logged in
+      message.value = ''
+      if (!isLoggedIn.value) {
+        name.value = ''
+        email.value = ''
+      }
+    } else {
+      showAlert(result.message || 'Failed to send message. Please try again.', 'error')
+    }
+  } catch (err) {
+    console.error('Contact form error:', err)
+    showAlert('Network error. Please check your connection and try again.', 'error')
+  } finally {
+    sending.value = false
+  }
 }
 </script>
+
 <template>
   <section class="contact">
+    <!-- Alert -->
+    <div v-if="alertMsg" :class="['alert', alertType]">
+      {{ alertMsg }}
+    </div>
+
     <header class="header">
       <h1>Contact Us</h1>
       <p>Questions or ready to start? DOMUS is here to help.</p>
@@ -73,9 +96,9 @@ function submitForm() {
           </span>
           <div class="info">
             <h3>Email</h3>
-            <a href="mailto:domus.architecture@email.com">domus.architecture@email.com</a>
+            <a href="mailto:domus.architecture92@gmail.com">domus.architecture92@gmail.com</a>
           </div>
-        </div>
+        </div>  
 
         <div class="card">
           <span class="icon">
@@ -83,17 +106,17 @@ function submitForm() {
           </span>
           <div class="info">
             <h3>Phone</h3>
-            <a href="tel:+639123456789">+63 912 345 6789</a>
+            <p>+63 912 345 6789</p>
           </div>
         </div>
 
         <div class="card">
           <span class="icon">
-            <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 00-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 00-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" fill="#e6b23a"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z" fill="#e6b23a"/></svg>
           </span>
           <div class="info">
             <h3>Location</h3>
-            <p>123 Main St, Mindoro, Philippines</p>
+            <p>Mindoro, Philippines</p>
           </div>
         </div>
       </div>
@@ -104,11 +127,25 @@ function submitForm() {
         <div class="row">
           <div class="field">
             <label>Name</label>
-            <input v-model="name" type="text" placeholder="Your name" required />
+            <input 
+              v-model="name" 
+              type="text" 
+              placeholder="Your name" 
+              required
+              :readonly="isLoggedIn"
+              :class="{ 'readonly-input': isLoggedIn }"
+            />
           </div>
           <div class="field">
             <label>Email</label>
-            <input v-model="email" type="email" placeholder="you@email.com" required />
+            <input 
+              v-model="email" 
+              type="email" 
+              placeholder="Your email" 
+              required
+              :readonly="isLoggedIn"
+              :class="{ 'readonly-input': isLoggedIn }"
+            />
           </div>
         </div>
 
@@ -117,18 +154,40 @@ function submitForm() {
           <textarea v-model="message" rows="5" placeholder="How can we help?" required></textarea>
         </div>
 
-        <button class="send" type="submit">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
-          Send
+        <button class="send" type="submit" :disabled="sending">
+          <svg v-if="!sending" width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+          <span v-if="sending" class="spinner"></span>
+          {{ sending ? 'Sending...' : 'Send' }}
         </button>
 
-        <p v-if="sent" class="sent">Thanks! We’ll get back shortly.</p>
+        <p v-if="sent" class="sent">Thanks! We'll get back shortly.</p>
       </form>
     </div>
   </section>
 </template>
 
 <style scoped>
+/* Alert styles */
+.alert {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: 0 4px 20px #00000022;
+  animation: slideDown 0.3s ease;
+}
+.alert.success { background: #e6f7e6; color: #2e7d32; border: 1px solid #a5d6a7; }
+.alert.error { background: #ffeaea; color: #c62828; border: 1px solid #ef9a9a; }
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .contact {
   max-width: 1100px;
   margin: 0 auto;
@@ -166,7 +225,7 @@ function submitForm() {
 }
 .icon svg { width: 28px; height: 28px; }
 .info h3 { margin: 0 0 4px; color: #213547; }
-.info a, .info p { color: #5a6675; text-decoration: none; }
+.info a, .info p { color: #5a6675; text-decoration: none; margin: 0; }
 
 .form {
   background: #fff;
@@ -190,8 +249,17 @@ input, textarea {
   border-radius: 10px;
   outline: none;
   background: #fff;
+  font-size: 1rem;
+  transition: border-color 0.2s;
 }
 input:focus, textarea:focus { border-color: #e6b23a; }
+
+/* Readonly style for logged-in user fields */
+.readonly-input {
+  background: #f5f5f5;
+  color: #555;
+  cursor: not-allowed;
+}
 
 .send {
   display: inline-flex; align-items: center; gap: 8px;
@@ -199,11 +267,30 @@ input:focus, textarea:focus { border-color: #e6b23a; }
   border-radius: 10px; padding: 10px 16px; font-weight: 700;
   cursor: pointer;
   box-shadow: 0 6px 20px #1976d244;
+  transition: background 0.2s, opacity 0.2s;
 }
+.send:hover { background: #1565c0; }
+.send:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .sent { color: #2e7d32; margin-top: 8px; font-weight: 600; }
 
 /* Responsive */
 @media (max-width: 920px) {
   .grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .row { grid-template-columns: 1fr; }
 }
 </style>

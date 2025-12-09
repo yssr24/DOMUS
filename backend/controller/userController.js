@@ -172,3 +172,4 @@ exports.changePassword = async (req, res) => {
   delete resetTokens[email]
   res.json({ success: true, message: 'Password updated successfully.' })
 }
+

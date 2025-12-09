@@ -24,7 +24,9 @@ router.get('/tasks', adminController.getTasks)
 router.post('/designs', upload.array('images', 10), adminController.addDesign)
 router.get('/designs', adminController.getDesigns)
 
-router.get('/files', adminController.getFiles)          // list Storage files
-router.get('/file', adminController.streamFile)   
+router.get('/files', adminController.getFiles)
+router.get('/file', adminController.streamFile)
+
+router.post('/contact', adminController.submitContactMessage) // NEW
 
 module.exports = router
