@@ -4,9 +4,7 @@
       <div>
         <p class="eyebrow">Client Projects</p>
         <h1>Active Engagements</h1>
-        <p class="subtitle">
-          Track timelines, deliverables, and updates for each architectural commission.
-        </p>
+        <p class="subtitle">Track timelines, deliverables, and updates for each architectural commission.</p>
       </div>
       <button class="refresh-btn" @click="fetchProjects" :disabled="loading">
         <span v-if="loading" class="spinner"></span>
@@ -32,18 +30,11 @@
         @click="openPanel(project)"
       >
         <div class="project-main">
-          <div
-            class="project-badge"
-            :style="{ background: project.theme?.chip || '#1a237e' }"
-          >
-            {{ project.code || '—' }}
-          </div>
+          <div class="project-badge" :style="{ background: project.theme?.chip || '#1a237e' }">{{ project.code }}</div>
           <div>
             <h2 class="project-title">{{ project.name }}</h2>
-            <p class="project-description">
-              {{ project.description || 'No description available.' }}
-            </p>
-            <ul v-if="project.tags.length" class="project-tags">
+            <p class="project-description">{{ project.description }}</p>
+            <ul class="project-tags">
               <li v-for="tag in project.tags" :key="tag">{{ tag }}</li>
             </ul>
           </div>
@@ -53,20 +44,16 @@
           <div>
             <span class="meta-label">Phase</span>
             <span class="meta-value">
-              <span :class="statusClass(project.status)">
-                {{ prettyStatus(project.status) }}
-              </span>
+              <span :class="statusClass(project.status)">{{ prettyStatus(project.status) }}</span>
             </span>
           </div>
           <div>
             <span class="meta-label">Schedule</span>
-            <span class="meta-value">
-              {{ formatDate(project.startDate) }} → {{ formatDate(project.dueDate) }}
-            </span>
+            <span class="meta-value">{{ formatDate(project.startDate) }} → {{ formatDate(project.dueDate) }}</span>
           </div>
           <div>
             <span class="meta-label">Client</span>
-            <span class="meta-value">{{ project.client || '—' }}</span>
+            <span class="meta-value">{{ project.client }}</span>
           </div>
         </div>
 
@@ -88,9 +75,9 @@
       >
         <header class="panel-head">
           <div>
-            <p class="panel-eyebrow">{{ selectedProject.code || 'PROJECT' }}</p>
+            <p class="panel-eyebrow">{{ selectedProject.code }}</p>
             <h2>{{ selectedProject.name }}</h2>
-            <p>{{ selectedProject.location || 'Location TBD' }}</p>
+            <p>{{ selectedProject.location }}</p>
           </div>
           <button class="close-btn" @click="closePanel">✕</button>
         </header>
@@ -123,56 +110,55 @@
             </li>
             <li>
               <span class="label">Budget</span>
-              <span class="value">{{ selectedProject.budget || '—' }}</span>
+              <span class="value">{{ selectedProject.budget }}</span>
             </li>
             <li>
               <span class="label">Floor Area</span>
-              <span class="value">{{ selectedProject.area || '—' }}</span>
+              <span class="value">{{ selectedProject.area }}</span>
             </li>
           </ul>
         </section>
 
-        <section class="panel-section" v-if="panelTeam.length">
+        <section class="panel-section">
           <h3>Key Team</h3>
           <ul class="panel-team">
-            <li v-for="member in panelTeam" :key="member.label">
-              <span class="label">{{ member.label }}</span>
-              <span class="value">{{ member.value }}</span>
+            <li>
+              <span class="label">Lead Architect</span>
+              <span class="value">{{ selectedProject.architect }}</span>
+            </li>
+            <li>
+              <span class="label">Project Manager</span>
+              <span class="value">{{ selectedProject.manager }}</span>
+            </li>
+            <li>
+              <span class="label">Client</span>
+              <span class="value">{{ selectedProject.client }} · {{ selectedProject.clientContact }}</span>
             </li>
           </ul>
         </section>
 
-        <section class="panel-section" v-if="panelFiles.length">
+        <section class="panel-section">
           <h3>Latest Files</h3>
           <ul class="panel-list">
-            <li v-for="file in panelFiles" :key="file.name + file.uploadedAt">
+            <li v-for="file in panelFiles" :key="file.name">
               <div>
                 <p class="item-title">{{ file.name }}</p>
                 <p class="item-meta">
-                  Uploaded by {{ file.uploadedBy || 'Unknown' }}
-                  <template v-if="file.role">
-                    ({{ file.role }})
-                  </template>
-                  · {{ formatDate(file.uploadedAt) }}
-                  <template v-if="file.size">
-                    · {{ formatSize(file.size) }}
-                  </template>
+                  Uploaded by {{ file.uploadedBy }} ({{ file.role }}) · {{ formatDate(file.uploadedAt) }} · {{ formatSize(file.size) }}
                 </p>
               </div>
             </li>
           </ul>
         </section>
 
-        <section class="panel-section" v-if="panelTasks.length">
+        <section class="panel-section">
           <h3>Open Tasks</h3>
           <ul class="panel-list">
-            <li v-for="task in panelTasks" :key="task.title + task.due">
+            <li v-for="task in panelTasks" :key="task.title">
               <div>
                 <p class="item-title">{{ task.title }}</p>
                 <p class="item-meta">
-                  Assigned to {{ task.assignedTo || 'Unassigned' }}
-                  · Due {{ formatDate(task.due) }}
-                  · {{ taskStatusLabel(task.status) }}
+                  Assigned to {{ task.assignedTo }} · Due {{ formatDate(task.due) }} · {{ taskStatusLabel(task.status) }}
                 </p>
               </div>
             </li>
@@ -196,31 +182,18 @@ import { API_BASE_URL } from '../../../config'
 import '/src/assets/css/user/Project.css'
 import '/src/assets/css/style.css'
 
+
 const router = useRouter()
 const projects = ref([])
 const loading = ref(false)
 const showPanel = ref(false)
 const selectedProject = ref(null)
-const isClient = typeof window !== 'undefined'
-const isMobile = ref(isClient ? window.innerWidth < 1024 : false)
+const isMobile = ref(window.innerWidth < 1024)
+
+const demoProjects = createDemoProjects()
 
 const panelFiles = computed(() => (selectedProject.value?.files || []).slice(0, 4))
 const panelTasks = computed(() => (selectedProject.value?.tasks || []).slice(0, 3))
-const panelTeam = computed(() => {
-  const team = []
-  if (selectedProject.value?.architect)
-    team.push({ label: 'Lead Architect', value: selectedProject.value.architect })
-  if (selectedProject.value?.manager)
-    team.push({ label: 'Project Manager', value: selectedProject.value.manager })
-  if (selectedProject.value?.client)
-    team.push({
-      label: 'Client',
-      value: selectedProject.value.clientContact
-        ? `${selectedProject.value.client} · ${selectedProject.value.clientContact}`
-        : selectedProject.value.client
-    })
-  return team
-})
 const progressOffset = computed(() => {
   const progress = Math.min(Math.max(selectedProject.value?.progress ?? 0, 0), 100)
   const circumference = 2 * Math.PI * 54
@@ -229,14 +202,12 @@ const progressOffset = computed(() => {
 
 function statusClass(status) {
   const map = {
-    'in-progress': 'status-pill construction',
     pending: 'status-pill pending',
     planning: 'status-pill planning',
     design: 'status-pill design',
     review: 'status-pill review',
     construction: 'status-pill construction',
-    completed: 'status-pill completed',
-    done: 'status-pill completed'
+    completed: 'status-pill completed'
   }
   return map[(status || '').toLowerCase()] || 'status-pill pending'
 }
@@ -247,11 +218,9 @@ function prettyStatus(status) {
 
 function taskStatusLabel(status) {
   const labels = {
-    todo: 'To Do',
-    'in-progress': 'In Progress',
-    review: 'In Review',
-    done: 'Completed',
     pending: 'Pending',
+    in_progress: 'In Progress',
+    review: 'In Review',
     completed: 'Completed'
   }
   return labels[(status || '').toLowerCase()] || 'Pending'
@@ -260,7 +229,6 @@ function taskStatusLabel(status) {
 function formatDate(value) {
   if (!value) return 'TBD'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'TBD'
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
@@ -274,109 +242,217 @@ function formatSize(bytes) {
 function openPanel(project) {
   selectedProject.value = project
   showPanel.value = true
-  if (isClient) document.body.style.overflow = 'hidden'
 }
 
 function closePanel() {
   showPanel.value = false
-  if (isClient) document.body.style.overflow = ''
 }
 
 function openProject(project) {
   if (!project) return
-  router.push(`/projects/${encodeURIComponent(project.id || project.code || 'project')}`)
-  closePanel()
+  sessionStorage.setItem('domus:selectedProjectId', project.id || 'selected-project')
+  sessionStorage.setItem('domus:selectedProjectPayload', JSON.stringify(project))
+  router.push({ name: 'project-details', params: { id: project.id || 'selected-project' } })
 }
 
 function checkMobile() {
-  if (!isClient) return
   isMobile.value = window.innerWidth < 1024
 }
 
 async function fetchProjects() {
-  const userData = isClient ? localStorage.getItem('domus_user') : null
-  if (!userData) {
-    projects.value = []
-    return
-  }
-
   loading.value = true
   try {
-    const user = JSON.parse(userData)
-    const res = await fetch(
-      `${API_BASE_URL}/api/admin/projects-for-client?email=${encodeURIComponent(user.email)}`,
-      { credentials: 'include' }
-    )
-    const payload = await res.json().catch(() => ({}))
-    if (res.ok && payload.success && Array.isArray(payload.projects)) {
-      projects.value = payload.projects.map(normalizeProject)
-    } else {
-      projects.value = []
+    const response = await fetch(`${API_BASE_URL}/api/user/projects`, { credentials: 'include' })
+    const payload = await response.json().catch(() => ({}))
+    if (response.ok && Array.isArray(payload.data)) {
+      const normalized = payload.data.map((item, index) => normalizeProject(item, index))
+      if (normalized.length) projects.value = normalized
     }
   } catch (error) {
     console.error('Project fetch failed:', error)
-    projects.value = []
   } finally {
+    if (!projects.value.length) projects.value = demoProjects
     loading.value = false
   }
 }
 
-function normalizeProject(raw = {}) {
-  const files = Array.isArray(raw.files)
-    ? raw.files.map(file => ({
-        name: file.fileName || file.name || 'Untitled File',
-        uploadedBy: file.uploadedByName || file.uploadedBy || '',
-        role: file.role || '',
-        uploadedAt: file.createdAt || file.uploadedAt || null,
-        type: file.type || '',
-        size: typeof file.size === 'number' ? file.size : null
-      }))
-    : []
-  const tasks = Array.isArray(raw.tasks)
-    ? raw.tasks.map(task => ({
-        title: task.title || 'Untitled Task',
-        assignedTo: task.assignedToName || task.assignedTo || '',
-        status: task.status || 'todo',
-        due: task.deadline || task.dueDate || null
-      }))
-    : []
+function normalizeProject(raw, index) {
+  const fallback = demoProjects[index % demoProjects.length]
+  const safeFiles = Array.isArray(raw.files)
+    ? raw.files.map((file, idx) => {
+        const base = fallback.files[idx % fallback.files.length]
+        return {
+          name: file.name || base.name,
+          uploadedBy: file.uploadedBy || file.uploader || base.uploadedBy,
+          role: file.role || file.uploaderRole || base.role,
+          uploadedAt: file.uploadedAt || file.createdAt || base.uploadedAt,
+          type: file.type || base.type,
+          size: file.size || base.size
+        }
+      })
+    : fallback.files
+  const safeTasks = Array.isArray(raw.tasks)
+    ? raw.tasks.map((task, idx) => {
+        const base = fallback.tasks[idx % fallback.tasks.length]
+        return {
+          title: task.title || base.title,
+          createdBy: task.createdBy || base.createdBy,
+          assignedTo: task.assignedTo || base.assignedTo,
+          status: task.status || base.status,
+          due: task.due || task.dueDate || base.due,
+          priority: task.priority || base.priority
+        }
+      })
+    : fallback.tasks
   return {
-    id: raw.id || raw._id || raw.projectId || '',
-    code: raw.code || raw.projectCode || raw.reference || '',
-    name: raw.name || raw.title || 'Untitled Project',
-    status: raw.status || 'pending',
-    progress: Number.isFinite(raw.progress) ? Math.min(Math.max(Math.round(raw.progress), 0), 100) : 0,
-    startDate: raw.startDate || raw.createdAt || null,
-    dueDate: raw.dueDate || raw.updatedAt || null,
-    client: raw.clientName || raw.client?.name || '',
-    clientContact: raw.clientContact || raw.client?.contact || '',
-    location: raw.location || '',
-    description: raw.description || '',
-    budget: raw.budget || '',
-    area: raw.area || '',
-    architect: raw.leadArchitect || '',
-    manager: raw.projectManager || '',
-    tags: Array.isArray(raw.tags) ? raw.tags : [],
-    files,
-    tasks,
-    theme: raw.theme || { chip: '#2563eb' }
+    id: raw.id || raw._id || fallback.id,
+    code: raw.code || raw.projectCode || fallback.code,
+    name: raw.name || raw.title || fallback.name,
+    status: raw.status || fallback.status,
+    phase: raw.phase || fallback.phase,
+    progress: Number.isFinite(raw.progress) ? Math.round(raw.progress) : fallback.progress,
+    startDate: raw.startDate || raw.projectStart || fallback.startDate,
+    dueDate: raw.dueDate || raw.projectEnd || fallback.dueDate,
+    client: raw.client?.name || raw.clientName || fallback.client,
+    clientContact: raw.client?.contact || raw.clientContact || fallback.clientContact,
+    location: raw.location || fallback.location,
+    description: raw.description || fallback.description,
+    budget: raw.budget || fallback.budget,
+    area: raw.area || fallback.area,
+    architect: raw.architect || fallback.architect,
+    manager: raw.manager || fallback.manager,
+    tags: raw.tags?.length ? raw.tags : fallback.tags,
+    files: safeFiles,
+    tasks: safeTasks,
+    milestones: raw.milestones?.length ? raw.milestones : fallback.milestones,
+    theme: raw.theme || fallback.theme
   }
 }
 
+function createDemoProjects() {
+  return [
+    {
+      id: 'villa-alta',
+      code: 'DOMUS-001',
+      name: 'Villa Alta Residence',
+      status: 'construction',
+      phase: 'Superstructure Works',
+      progress: 68,
+      startDate: '2024-05-20',
+      dueDate: '2025-03-30',
+      client: 'Mr. & Mrs. Zamora',
+      clientContact: '+63 917 555 0192',
+      location: 'Barangay Aninuan, Puerto Galera, Oriental Mindoro',
+      description: 'Three-storey tropical modern residence with cantilevered terraces, lap pool, and sea-facing glazing.',
+      budget: '₱18,500,000',
+      area: '412 sqm',
+      architect: 'Ar. Keanu Borbe',
+      manager: 'Ar. Elaine Balay',
+      tags: ['Tropical Modern', 'Residential', 'Premium'],
+      theme: { chip: '#1a237e', gradient: 'linear-gradient(135deg, #1a237e 0%, #03a9f4 70%)' },
+      files: [
+        { name: 'Rear Elevation.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-11-05T09:00:00Z', type: 'pdf', size: 1250000 },
+        { name: "Architect's Perspective.jpg", uploadedBy: 'Keanu Borbe', role: 'Lead Architect', uploadedAt: '2024-11-02T11:00:00Z', type: 'jpg', size: 2450000 },
+        { name: 'Structural Details.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-10-28T15:30:00Z', type: 'pdf', size: 1810000 },
+        { name: 'Materials Schedule.xlsx', uploadedBy: 'Elaine Balay', role: 'Project Manager', uploadedAt: '2024-10-24T08:45:00Z', type: 'xlsx', size: 250000 }
+      ],
+      tasks: [
+        { title: 'Issue AFC structural drawings', createdBy: 'Admin', assignedTo: 'Jc Bautista', status: 'in_progress', due: '2024-12-12', priority: 'high' },
+        { title: 'Coordinate glazing specs with supplier', createdBy: 'Admin', assignedTo: 'Elaine Balay', status: 'pending', due: '2024-12-08', priority: 'medium' },
+        { title: 'Finalize pool waterproofing details', createdBy: 'Admin', assignedTo: 'Keanu Borbe', status: 'review', due: '2024-12-05', priority: 'high' }
+      ],
+      milestones: [
+        { label: 'Concept Sign-off', date: '2024-06-15', done: true },
+        { label: 'Design Development', date: '2024-07-28', done: true },
+        { label: 'Permit Approval', date: '2024-09-10', done: true },
+        { label: 'Structural Shell', date: '2024-12-22', done: false }
+      ]
+    },
+    {
+      id: 'marina-heights',
+      code: 'DOMUS-014',
+      name: 'Marina Heights Condotel',
+      status: 'design',
+      phase: 'Facade Optimization',
+      progress: 42,
+      startDate: '2024-08-05',
+      dueDate: '2025-06-18',
+      client: 'Harborline Hospitality Group',
+      clientContact: '+63 998 441 2210',
+      location: 'Calapan Boulevard, Oriental Mindoro',
+      description: 'Mixed-use condotel with cascading podium gardens, double-height lobby, and rooftop amenities.',
+      budget: '₱285,000,000',
+      area: '18,950 sqm',
+      architect: 'Ar. Keanu Borbe',
+      manager: 'Ar. Elaine Balay',
+      tags: ['High-Rise', 'Hospitality', 'Urban'],
+      theme: { chip: '#0f4c75', gradient: 'linear-gradient(135deg, #0f4c75 0%, #3282b8 70%)' },
+      files: [
+        { name: 'Level 12 Floor Plan.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-11-08T13:15:00Z', type: 'pdf', size: 1930000 },
+        { name: 'Facade Study Set.pptx', uploadedBy: 'Elaine Balay', role: 'Project Manager', uploadedAt: '2024-11-01T10:00:00Z', type: 'pptx', size: 4730000 },
+        { name: "MEP Coordination Matrix.xlsx", uploadedBy: 'Elaine Balay', role: 'Project Manager', uploadedAt: '2024-10-29T16:20:00Z', type: 'xlsx', size: 320000 }
+      ],
+      tasks: [
+        { title: 'Integrate mechanical riser adjustments', createdBy: 'Admin', assignedTo: 'Jc Bautista', status: 'pending', due: '2024-12-14', priority: 'high' },
+        { title: 'Finalize facade shading study', createdBy: 'Admin', assignedTo: 'Elaine Balay', status: 'in_progress', due: '2024-12-09', priority: 'medium' },
+        { title: 'Prepare client presentation boards', createdBy: 'Admin', assignedTo: 'Keanu Borbe', status: 'pending', due: '2024-12-11', priority: 'medium' }
+      ],
+      milestones: [
+        { label: 'Site Analysis', date: '2024-08-22', done: true },
+        { label: 'Concept Alternatives', date: '2024-09-30', done: true },
+        { label: 'Design Review Board', date: '2024-11-18', done: false }
+      ]
+    },
+    {
+      id: 'cove-retreat',
+      code: 'DOMUS-021',
+      name: 'Cove Retreat Villa',
+      status: 'planning',
+      phase: 'Concept Narratives',
+      progress: 18,
+      startDate: '2024-10-01',
+      dueDate: '2025-08-12',
+      client: 'Ms. Lyrna Gayeta',
+      clientContact: '+63 917 880 7744',
+      location: 'Bucayao Cove, Puerto Galera, Oriental Mindoro',
+      description: 'Adaptive reuse of a seaside villa into a boutique retreat with eco-responsive materials and courtyards.',
+      budget: '₱34,800,000',
+      area: '1,250 sqm',
+      architect: 'Ar. Keanu Borbe',
+      manager: 'Ar. Elaine Balay',
+      tags: ['Adaptive Reuse', 'Hospitality', 'Eco-Responsive'],
+      theme: { chip: '#14532d', gradient: 'linear-gradient(135deg, #14532d 0%, #10b981 70%)' },
+      files: [
+        { name: 'Existing Conditions Survey.pdf', uploadedBy: 'Jc Bautista', role: 'Senior Drafter', uploadedAt: '2024-11-03T14:10:00Z', type: 'pdf', size: 1620000 },
+        { name: 'Landscape Mood Board.jpg', uploadedBy: 'Keanu Borbe', role: 'Lead Architect', uploadedAt: '2024-10-28T09:40:00Z', type: 'jpg', size: 1890000 }
+      ],
+      tasks: [
+        { title: 'Compile precedent imagery', createdBy: 'Admin', assignedTo: 'Keanu Borbe', status: 'completed', due: '2024-11-05', priority: 'low' },
+        { title: 'Finalize zoning compliance matrix', createdBy: 'Admin', assignedTo: 'Elaine Balay', status: 'pending', due: '2024-12-20', priority: 'medium' }
+      ],
+      milestones: [
+        { label: 'Site Reconnaissance', date: '2024-10-12', done: true },
+        { label: 'Concept Sketches', date: '2024-11-25', done: false }
+      ]
+    }
+  ]
+}
+
 onMounted(() => {
-  checkMobile()
   fetchProjects()
-  if (isClient) window.addEventListener('resize', checkMobile)
+  window.addEventListener('resize', checkMobile)
 })
 
 onUnmounted(() => {
-  if (isClient) window.removeEventListener('resize', checkMobile)
-  if (isClient) document.body.style.overflow = ''
+  window.removeEventListener('resize', checkMobile)
 })
+const heroStyle = computed(() => ({
+  background: project.value?.theme?.gradient || 'linear-gradient(135deg, #f6d365 0%, #fda085 50%, #ffe9b3 100%)'
+}))
 </script>
 
 <style>
-.projects-wrap {
+  .projects-wrap {
   position: relative;
   padding: 32px 32px 48px;
   background: #f7f9fb;
@@ -677,6 +753,7 @@ onUnmounted(() => {
 }
 .panel-progress-circle .stroke {
   fill: none;
+  stroke: url(#gradient);
   stroke: #38bdf8;
   stroke-width: 12;
   stroke-linecap: round;
@@ -781,6 +858,7 @@ onUnmounted(() => {
 .slide-in-leave-to {
   transform: translateX(100%);
 }
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -790,6 +868,7 @@ onUnmounted(() => {
   0%, 100% { transform: scale(0.85); opacity: 0.4; }
   50% { transform: scale(1); opacity: 1; }
 }
+
 @media (max-width: 1280px) {
   .project-row {
     grid-template-columns: 1fr;
@@ -817,4 +896,5 @@ onUnmounted(() => {
     padding: 20px;
   }
 }
+
 </style>
