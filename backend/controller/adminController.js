@@ -299,7 +299,7 @@ async function sendProjectCreatedEmail({ to, clientName, projectLink }) {
   html = html.replace('[Client Name]', clientName || 'Client')
   html = html.replace('[PROJECT_LINK]', projectLink)
   return transporter.sendMail({
-    from: `"DOMUS" <${process.env.EMAIL_USER}>`,
+    from: `"DOMUS" <${process.env.EMAIL_FROM}>`,
     to,
     subject: 'Your project has been created - DOMUS Architecture',
     html

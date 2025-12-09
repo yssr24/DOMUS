@@ -36,7 +36,7 @@ function sendVerificationEmail(email, code) {
   let html = fs.readFileSync(paths.emailTemplate, 'utf8')
   html = html.replace('123456', code)
   return transporter.sendMail({
-    from: `"DOMUS" <${process.env.EMAIL_USER}>`,
+    from: `"DOMUS" <${process.env.EMAIL_FROM}>`,
     to: email,
     subject: 'DOMUS Email Verification',
     html
