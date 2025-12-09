@@ -68,11 +68,13 @@
     </section>
 
     <transition name="slide-in">
-      <aside
-        v-if="showPanel && selectedProject"
-        class="project-panel"
-        :class="{ mobile: isMobile }"
-      >
+   <aside
+     v-if="showPanel && selectedProject"
+     class="project-panel"
+     :class="{ mobile: isMobile }"
+   >     
+   <div class="panel-body">
+
         <header class="panel-head">
           <div>
             <p class="panel-eyebrow">{{ selectedProject.code }}</p>
@@ -164,10 +166,13 @@
             </li>
           </ul>
         </section>
+     </div>
 
-        <button class="open-project-btn" @click="openProject(selectedProject)">
-          Open in Project Workspace
-        </button>
+     <footer class="panel-footer">
+       <button class="open-project-btn" @click="openProject(selectedProject)">
+         Open in Project Workspace
+       </button>
+     </footer>
       </aside>
     </transition>
 
@@ -674,22 +679,25 @@ const heroStyle = computed(() => ({
   font-weight: 700;
   color: #0f172a;
 }
-.project-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 420px;
-  height: 100%;
-  background: #0f172a;
-  color: white;
-  padding: 36px 32px;
-  overflow-y: auto;
-  box-shadow: -28px 0 60px rgba(15, 23, 42, 0.45);
-  z-index: 30;
-}
-.project-panel.mobile {
-  width: 100%;
-}
+   .project-panel {
+     position: fixed;
+     top: 0;
+     right: 0;
+     width: min(420px, 100%);
+     height: 100%;
+     display: flex;
+     flex-direction: column;
+     gap: 24px;
+     background: #0f172a;
+     color: white;
+     padding: 36px 32px 28px;
+     overflow: hidden;
+     box-shadow: -28px 0 60px rgba(15, 23, 42, 0.45);
+     z-index: 30;
+   }
+   .project-panel.mobile {
+     padding: 28px 20px 24px;
+   }
 .panel-backdrop {
   position: fixed;
   inset: 0;
@@ -858,6 +866,25 @@ const heroStyle = computed(() => ({
   transform: translateX(100%);
 }
 
+   .panel-body {
+     flex: 1;
+     overflow-y: auto;
+     padding-right: 4px;
+     display: flex;
+     flex-direction: column;
+     gap: 26px;
+   }
+   .panel-footer {
+     position: sticky;
+     bottom: 0;
+     margin: 0 -32px;
+     padding: 18px 32px 0;
+     background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.92) 40%, #0f172a 100%);
+   }
+   .project-panel.mobile .panel-footer {
+     margin: 0 -20px;
+     padding: 16px 20px 0;
+   }
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -895,5 +922,14 @@ const heroStyle = computed(() => ({
     padding: 20px;
   }
 }
-
+   @media (max-width: 600px) {
+     .panel-progress-circle {
+       width: 112px;
+       height: 112px;
+     }
+     .panel-progress-circle svg {
+       width: 112px;
+       height: 112px;
+     }
+   }
 </style>
