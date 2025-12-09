@@ -192,7 +192,17 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { API_BASE_URL } from '../../../config'
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+  orderBy,
+  limit
+} from 'firebase/firestore'
 
 const router = useRouter()
 const projects = ref([])
@@ -201,6 +211,9 @@ const showPanel = ref(false)
 const selectedProject = ref(null)
 const isClient = typeof window !== 'undefined'
 const isMobile = ref(isClient ? window.innerWidth < 1024 : false)
+
+const db = getFirestore()
+const userCache = new Map()
 
 const panelFiles = computed(() => (selectedProject.value?.files || []).slice(0, 4))
 const panelTasks = computed(() => (selectedProject.value?.tasks || []).slice(0, 3))
@@ -282,6 +295,10 @@ function closePanel() {
 
 function openProject(project) {
   if (!project) return
+  if (isClient) {
+    sessionStorage.setItem('domus:selectedProjectPayload', JSON.stringify(project))
+    sessionStorage.setItem('domus:selectedProjectId', project.id)
+  }
   router.push(`/projects/${encodeURIComponent(project.id || project.code || 'project')}`)
   closePanel()
 }
@@ -289,6 +306,217 @@ function openProject(project) {
 function checkMobile() {
   if (!isClient) return
   isMobile.value = window.innerWidth < 1024
+}
+
+function phaseFromStatus(status) {
+  const map = {
+    pending: 'Project Briefing',
+    planning: 'Planning & Strategy',
+    design: 'Design Development',
+    review: 'Review & Approval',
+    construction: 'Construction',
+    'in-progress': 'Active Delivery',
+    completed: 'Completed'
+  }
+  return map[(status || '').toLowerCase()] || 'Pending'
+}
+
+function ensureArray(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function toISOString(value) {
+  if (!value) return null
+  if (value.toDate) return value.toDate().toISOString()
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'number') return new Date(value).toISOString()
+  return value
+}
+
+function tintFromName(name = '') {
+  const palette = ['#2563eb', '#1d4ed8', '#0ea5e9', '#38bdf8', '#7c3aed', '#f97316', '#f59e0b', '#10b981']
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return palette[Math.abs(hash) % palette.length]
+}
+
+async function getUserProfile(userId) {
+  if (!userId) return null
+  if (userCache.has(userId)) return userCache.get(userId)
+  const snap = await getDoc(doc(db, 'users', userId))
+  if (!snap.exists()) {
+    userCache.set(userId, null)
+    return null
+  }
+  const data = snap.data()
+  const profile = {
+    id: userId,
+    name: data.name || '',
+    email: data.email || '',
+    role: data.role || '',
+    profilePic: data.profilePic || '',
+    contact: data.contact || data.phone || ''
+  }
+  userCache.set(userId, profile)
+  return profile
+}
+
+async function fetchTasksForProject(projectId) {
+  const tasksRef = collection(db, 'tasks')
+  const q = query(tasksRef, where('projectId', '==', projectId))
+  const snap = await getDocs(q)
+  return Promise.all(
+    snap.docs.map(async taskSnap => {
+      const data = taskSnap.data()
+      const assignedProfile = await getUserProfile(data.assignedTo)
+      const createdProfile = await getUserProfile(data.createdBy)
+      return {
+        id: taskSnap.id,
+        title: data.title || 'Untitled Task',
+        description: data.description || '',
+        assignedTo: assignedProfile?.name || assignedProfile?.email || data.assignedTo || '',
+        assignedToId: data.assignedTo || '',
+        createdBy: createdProfile?.name || createdProfile?.email || data.createdBy || '',
+        status: data.status || 'pending',
+        due: toISOString(data.deadline || data.dueDate),
+        priority: (data.priority || 'medium').toLowerCase()
+      }
+    })
+  )
+}
+
+async function fetchFilesForProject(projectId) {
+  const filesRef = collection(db, 'files')
+  const q = query(filesRef, where('projectId', '==', projectId), orderBy('createdAt', 'desc'))
+  const snap = await getDocs(q)
+  return Promise.all(
+    snap.docs.map(async fileSnap => {
+      const data = fileSnap.data()
+      const uploader = await getUserProfile(data.uploadedBy)
+      return {
+        id: fileSnap.id,
+        name: data.fileName || 'Untitled File',
+        url: data.fileUrl || '',
+        type: data.type || 'file',
+        uploadedAt: toISOString(data.createdAt),
+        size: data.size || null,
+        uploadedBy: uploader?.name || uploader?.email || data.uploadedBy || '',
+        role: uploader?.role || ''
+      }
+    })
+  )
+}
+
+function deriveMilestonesFromTasks(tasks, createdAt, updatedAt) {
+  const milestones = []
+  if (createdAt) {
+    milestones.push({ label: 'Project Kickoff', date: createdAt, done: true })
+  }
+  const sorted = [...tasks].filter(t => t.due).sort((a, b) => new Date(a.due) - new Date(b.due))
+  sorted.slice(0, 3).forEach(task => {
+    const done = ['done', 'completed'].includes((task.status || '').toLowerCase())
+    milestones.push({ label: task.title, date: task.due, done })
+  })
+  if (updatedAt) {
+    milestones.push({ label: 'Latest Update', date: updatedAt, done: false })
+  }
+  return milestones
+}
+
+function computeProgress(tasks, status) {
+  if (!tasks.length) return (status || '').toLowerCase() === 'completed' ? 100 : 0
+  const done = tasks.filter(task => ['done', 'completed'].includes((task.status || '').toLowerCase())).length
+  return Math.round((done / tasks.length) * 100)
+}
+
+async function assembleProject(projectSnap, clientProfile, index) {
+  const data = projectSnap.data()
+  const projectId = projectSnap.id
+  const staffAssigned = ensureArray(data.staffAssigned)
+  const staffProfiles = (
+    await Promise.all(staffAssigned.map(id => getUserProfile(id)))
+  ).filter(Boolean)
+
+  const architectProfile =
+    staffProfiles.find(member => member.role.toLowerCase().includes('architect')) || staffProfiles[0]
+  const managerProfile =
+    staffProfiles.find(member => member.role.toLowerCase().includes('manager')) ||
+    staffProfiles.find(member => member.id !== architectProfile?.id)
+
+  const tasks = await fetchTasksForProject(projectId)
+  const files = await fetchFilesForProject(projectId)
+  const createdAt = toISOString(data.createdAt)
+  const updatedAt = toISOString(data.updatedAt)
+  const progress = computeProgress(tasks, data.status)
+  const milestones = deriveMilestonesFromTasks(tasks, createdAt, updatedAt)
+
+  const themePalette = [
+    { chip: '#2563eb', gradient: 'linear-gradient(135deg, #0f172a 0%, #2563eb 55%, #38bdf8 100%)' },
+    { chip: '#1d4ed8', gradient: 'linear-gradient(135deg, #111827 0%, #1d4ed8 50%, #4ade80 100%)' },
+    { chip: '#047857', gradient: 'linear-gradient(135deg, #0f172a 0%, #047857 60%, #22d3ee 100%)' },
+    { chip: '#7c3aed', gradient: 'linear-gradient(135deg, #0f172a 0%, #7c3aed 55%, #f87171 100%)' }
+  ]
+
+  const teamCards = staffProfiles.map(member => ({
+    name: member.name || member.email || 'Team Member',
+    role: member.role || 'Staff',
+    note: member.contact ? `Contact · ${member.contact}` : member.email || '',
+    tint: tintFromName(member.name || member.email)
+  }))
+
+  return {
+    id: projectId,
+    code: data.code || data.reference || projectId.toUpperCase(),
+    name: data.name || 'Untitled Project',
+    description: data.description || '',
+    longform: data.longform || data.description || '',
+    status: data.status || 'pending',
+    phase: data.phase || phaseFromStatus(data.status),
+    progress,
+    startDate: createdAt,
+    dueDate: toISOString(data.deadline || data.dueDate),
+    client: clientProfile?.name || clientProfile?.email || '',
+    clientContact: clientProfile?.contact || clientProfile?.email || '',
+    clientId: clientProfile?.id || data.clientId || '',
+    location: data.location || '',
+    budget: data.budget || '',
+    area: data.area || '',
+    architect: architectProfile?.name || '',
+    manager: managerProfile?.name || '',
+    tags: ensureArray(data.tags).length ? ensureArray(data.tags) : [prettyStatus(data.status)],
+    files,
+    tasks,
+    milestones,
+    team: teamCards,
+    theme: themePalette[index % themePalette.length]
+  }
+}
+
+async function fetchProjectsForClient(email) {
+  const usersRef = collection(db, 'users')
+  const userSnap = await getDocs(query(usersRef, where('email', '==', email.toLowerCase()), limit(1)))
+  if (userSnap.empty) return []
+  const clientDoc = userSnap.docs[0]
+  const clientProfile = {
+    id: clientDoc.id,
+    name: clientDoc.data().name || '',
+    email: clientDoc.data().email || '',
+    contact: clientDoc.data().contact || clientDoc.data().phone || ''
+  }
+
+  const assigned = ensureArray(clientDoc.data().assignedProjects)
+  let projectDocs = []
+
+  if (assigned.length) {
+    const docSnaps = await Promise.all(assigned.map(projectId => getDoc(doc(db, 'projects', projectId))))
+    projectDocs = docSnaps.filter(snap => snap.exists())
+  } else {
+    const projectsRef = collection(db, 'projects')
+    const snap = await getDocs(query(projectsRef, where('clientId', '==', clientDoc.id)))
+    projectDocs = snap.docs
+  }
+
+  return Promise.all(projectDocs.map((snap, index) => assembleProject(snap, clientProfile, index)))
 }
 
 async function fetchProjects() {
@@ -301,63 +529,17 @@ async function fetchProjects() {
   loading.value = true
   try {
     const user = JSON.parse(userData)
-    const res = await fetch(
-      `${API_BASE_URL}/api/admin/projects-for-client?email=${encodeURIComponent(user.email)}`,
-      { credentials: 'include' }
-    )
-    const payload = await res.json().catch(() => ({}))
-    if (res.ok && payload.success && Array.isArray(payload.projects)) {
-      projects.value = payload.projects.map(normalizeProject)
-    } else {
-      projects.value = []
+    const fetched = await fetchProjectsForClient(user.email)
+    projects.value = fetched
+    if (selectedProject.value) {
+      const refreshed = fetched.find(p => p.id === selectedProject.value.id)
+      if (refreshed) selectedProject.value = refreshed
     }
   } catch (error) {
     console.error('Project fetch failed:', error)
     projects.value = []
   } finally {
     loading.value = false
-  }
-}
-
-function normalizeProject(raw = {}) {
-  const files = Array.isArray(raw.files)
-    ? raw.files.map(file => ({
-        name: file.fileName || file.name || 'Untitled File',
-        uploadedBy: file.uploadedByName || file.uploadedBy || '',
-        role: file.role || '',
-        uploadedAt: file.createdAt || file.uploadedAt || null,
-        type: file.type || '',
-        size: typeof file.size === 'number' ? file.size : null
-      }))
-    : []
-  const tasks = Array.isArray(raw.tasks)
-    ? raw.tasks.map(task => ({
-        title: task.title || 'Untitled Task',
-        assignedTo: task.assignedToName || task.assignedTo || '',
-        status: task.status || 'todo',
-        due: task.deadline || task.dueDate || null
-      }))
-    : []
-  return {
-    id: raw.id || raw._id || raw.projectId || '',
-    code: raw.code || raw.projectCode || raw.reference || '',
-    name: raw.name || raw.title || 'Untitled Project',
-    status: raw.status || 'pending',
-    progress: Number.isFinite(raw.progress) ? Math.min(Math.max(Math.round(raw.progress), 0), 100) : 0,
-    startDate: raw.startDate || raw.createdAt || null,
-    dueDate: raw.dueDate || raw.updatedAt || null,
-    client: raw.clientName || raw.client?.name || '',
-    clientContact: raw.clientContact || raw.client?.contact || '',
-    location: raw.location || '',
-    description: raw.description || '',
-    budget: raw.budget || '',
-    area: raw.area || '',
-    architect: raw.leadArchitect || '',
-    manager: raw.projectManager || '',
-    tags: Array.isArray(raw.tags) ? raw.tags : [],
-    files,
-    tasks,
-    theme: raw.theme || { chip: '#2563eb' }
   }
 }
 
