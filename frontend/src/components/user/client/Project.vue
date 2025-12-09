@@ -1,564 +1,819 @@
 <template>
-  <section class="projects-wrap">
-    <div class="projects-header">
-      <h1>Projects</h1>
-      <span class="underline"></span>
-    </div>
+  <div class="projects-wrap">
+    <header class="projects-header">
+      <div>
+        <p class="eyebrow">Client Projects</p>
+        <h1>Active Engagements</h1>
+        <p class="subtitle">
+          Track timelines, deliverables, and updates for each architectural commission.
+        </p>
+      </div>
+      <button class="refresh-btn" @click="fetchProjects" :disabled="loading">
+        <span v-if="loading" class="spinner"></span>
+        <span v-else>Refresh</span>
+      </button>
+    </header>
 
-    <div class="projects-list">
+    <section v-if="loading" class="loading-state">
+      <div class="pulse"></div>
+      <p>Fetching current projects…</p>
+    </section>
+
+    <section v-else-if="!projects.length" class="empty-state">
+      <p>No projects found.</p>
+      <button class="refresh-btn" @click="fetchProjects">Try again</button>
+    </section>
+
+    <section v-else class="projects-list">
       <article
-        v-for="p in projects"
-        :key="p.id"
+        v-for="project in projects"
+        :key="project.id"
         class="project-row"
+        @click="openPanel(project)"
       >
-        <div class="file-icon" aria-hidden="true">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-            <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z" fill="#e6b23a22"/>
-            <path d="M14 2v4a1 1 0 0 0 1 1h4" stroke="#e6b23a" stroke-width="1.5"/>
-            <rect x="7.5" y="12" width="9" height="1.6" rx="0.8" fill="#21354733"/>
-            <rect x="7.5" y="15" width="7" height="1.6" rx="0.8" fill="#21354722"/>
-          </svg>
-        </div>
         <div class="project-main">
-          <h3 class="project-title">{{ p.title }}</h3>
-          <div class="project-meta">
-            <span class="status-pill" :class="statusClass(p.status)">{{ p.status }}</span>
-            <span class="project-id" v-if="p.code">ID: {{ p.code }}</span>
+          <div
+            class="project-badge"
+            :style="{ background: project.theme?.chip || '#1a237e' }"
+          >
+            {{ project.code || '—' }}
+          </div>
+          <div>
+            <h2 class="project-title">{{ project.name }}</h2>
+            <p class="project-description">{{ project.description || 'No description available.' }}</p>
+            <ul v-if="project.tags?.length" class="project-tags">
+              <li v-for="tag in project.tags" :key="tag">{{ tag }}</li>
+            </ul>
           </div>
         </div>
-        <div class="project-actions">
-          <button class="view-btn" type="button" @click="openPanel(p)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:8px">
-              <path d="M12 5c-7 0-10 7-10 7s3 7 10 7s10-7 10-7s-3-7-10-7Zm0 11a4 4 0 1 1 0-8a4 4 0 0 1 0 8Z" fill="currentColor"/>
-            </svg>
-            View
-          </button>
+
+        <div class="project-meta">
+          <div>
+            <span class="meta-label">Phase</span>
+            <span class="meta-value">
+              <span :class="statusClass(project.status)">
+                {{ prettyStatus(project.status) }}
+              </span>
+            </span>
+          </div>
+          <div>
+            <span class="meta-label">Schedule</span>
+            <span class="meta-value">
+              {{ formatDate(project.startDate) }} → {{ formatDate(project.dueDate) }}
+            </span>
+          </div>
+          <div>
+            <span class="meta-label">Client</span>
+            <span class="meta-value">{{ project.client || '—' }}</span>
+          </div>
+        </div>
+
+        <div class="project-progress">
+          <div class="progress-label">Progress</div>
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: (project.progress ?? 0) + '%' }"></div>
+          </div>
+          <div class="progress-value">{{ project.progress ?? 0 }}%</div>
         </div>
       </article>
-      <div v-if="!loading && projects.length === 0" style="text-align:center;color:#aaa;padding:32px 0;">
-        No projects found.
-      </div>
-      <div v-if="loading" style="text-align:center;color:#e6b23a;padding:32px 0;">
-        Loading projects...
-      </div>
-    </div>
+    </section>
 
-    <!-- Side Panel (inside domus-main) -->
-    <transition name="slide-panel">
-      <div
-        v-if="showPanel"
-        class="side-panel-inside"
+    <transition name="slide-in">
+      <aside
+        v-if="showPanel && selectedProject"
+        class="project-panel"
         :class="{ mobile: isMobile }"
-        @click.self="closePanel"
       >
-        <div class="panel-content">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <span class="panel-title">{{ selectedProject.title }}</span>
-              <span class="panel-code" v-if="selectedProject.code">({{ selectedProject.code }})</span>
-            </div>
-            <button class="close-btn" @click="closePanel" aria-label="Close">&times;</button>
+        <header class="panel-head">
+          <div>
+            <p class="panel-eyebrow">{{ selectedProject.code || 'PROJECT' }}</p>
+            <h2>{{ selectedProject.name }}</h2>
+            <p>{{ selectedProject.location || 'Location TBD' }}</p>
           </div>
-          <div class="panel-section">
-            <label>Status/Phase:</label>
-            <span class="status-pill" :class="statusClass(selectedProject.status)">{{ selectedProject.status }}</span>
-          </div>
-          <div class="panel-section">
-            <label>Timeline:</label>
-            <span>{{ formatDate(selectedProject.createdAt) }}</span>
-          </div>
-          <div class="panel-section" v-if="selectedProject.description">
-            <label>Description:</label>
-            <div class="panel-desc">{{ selectedProject.description }}</div>
-          </div>
-          <div class="panel-section location-section">
-            <label>Location:</label>
-            <div class="location-fields">
-              <div>
-                <span class="loc-label">Province:</span>
-                <span class="loc-value">{{ selectedProject.location?.province || 'N/A' }}</span>
-              </div>
-              <div>
-                <span class="loc-label">City:</span>
-                <span class="loc-value">{{ selectedProject.location?.city || 'N/A' }}</span>
-              </div>
-              <div>
-                <span class="loc-label">Barangay:</span>
-                <span class="loc-value">{{ selectedProject.location?.barangay || 'N/A' }}</span>
-              </div>
-              <div>
-                <span class="loc-label">Zip Code:</span>
-                <span class="loc-value">{{ selectedProject.location?.zip || 'N/A' }}</span>
-              </div>
+          <button class="close-btn" @click="closePanel">✕</button>
+        </header>
+
+        <section class="panel-progress">
+          <div class="panel-progress-circle">
+            <svg viewBox="0 0 120 120">
+              <circle class="trail" cx="60" cy="60" r="54" />
+              <circle
+                class="stroke"
+                cx="60"
+                cy="60"
+                r="54"
+                :style="{ strokeDashoffset: progressOffset }"
+              />
+            </svg>
+            <div class="panel-progress-value">
+              <span>{{ selectedProject.progress ?? 0 }}%</span>
+              <small>{{ prettyStatus(selectedProject.status) }}</small>
             </div>
           </div>
-          <div class="panel-section" v-if="selectedProject.staffId || selectedProject.leadArchitect">
-            <label>Staff Assigned:</label>
-            <div class="staff-list">
-              <div v-if="selectedProject.leadArchitect">
-                <span class="staff-label">Lead Architect:</span>
-                <span class="staff-value">{{ selectedProject.leadArchitect }}</span>
+          <ul class="panel-stats">
+            <li>
+              <span class="label">Start</span>
+              <span class="value">{{ formatDate(selectedProject.startDate) }}</span>
+            </li>
+            <li>
+              <span class="label">Turnover</span>
+              <span class="value">{{ formatDate(selectedProject.dueDate) }}</span>
+            </li>
+            <li>
+              <span class="label">Budget</span>
+              <span class="value">{{ selectedProject.budget || '—' }}</span>
+            </li>
+            <li>
+              <span class="label">Floor Area</span>
+              <span class="value">{{ selectedProject.area || '—' }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="panel-section">
+          <h3>Key Team</h3>
+          <ul class="panel-team">
+            <li v-if="selectedProject.architect">
+              <span class="label">Lead Architect</span>
+              <span class="value">{{ selectedProject.architect }}</span>
+            </li>
+            <li v-if="selectedProject.manager">
+              <span class="label">Project Manager</span>
+              <span class="value">{{ selectedProject.manager }}</span>
+            </li>
+            <li v-if="selectedProject.client">
+              <span class="label">Client</span>
+              <span class="value">
+                {{ selectedProject.client }}
+                <template v-if="selectedProject.clientContact">
+                  · {{ selectedProject.clientContact }}
+                </template>
+              </span>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="panelFiles.length" class="panel-section">
+          <h3>Latest Files</h3>
+          <ul class="panel-list">
+            <li v-for="file in panelFiles" :key="file.name + file.uploadedAt">
+              <div>
+                <p class="item-title">{{ file.name }}</p>
+                <p class="item-meta">
+                  Uploaded by {{ file.uploadedBy || 'Unknown' }}
+                  <template v-if="file.role">
+                    ({{ file.role }})
+                  </template>
+                  · {{ formatDate(file.uploadedAt) }}
+                  <template v-if="file.size">
+                    · {{ formatSize(file.size) }}
+                  </template>
+                </p>
               </div>
-              <div v-if="selectedProject.staffId">
-                <span class="staff-label">Staff ID:</span>
-                <span class="staff-value">{{ selectedProject.staffId }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="panelTasks.length" class="panel-section">
+          <h3>Open Tasks</h3>
+          <ul class="panel-list">
+            <li v-for="task in panelTasks" :key="task.title + task.due">
+              <div>
+                <p class="item-title">{{ task.title }}</p>
+                <p class="item-meta">
+                  Assigned to {{ task.assignedTo || 'Unassigned' }}
+                  · Due {{ formatDate(task.due) }}
+                  · {{ taskStatusLabel(task.status) }}
+                </p>
               </div>
-            </div>
-          </div>
-          <div class="panel-actions-inline">
-            <button class="open-btn" @click="openProject(selectedProject)">Open</button>
-          </div>
-        </div>
-      </div>
+            </li>
+          </ul>
+        </section>
+
+        <button class="open-project-btn" @click="openProject(selectedProject)">
+          Open in Project Workspace
+        </button>
+      </aside>
     </transition>
-  </section>
+
+    <div v-if="showPanel && isMobile" class="panel-backdrop" @click="closePanel"></div>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE_URL } from '../../../config'
+import '/src/assets/css/user/Project.css'
+import '/src/assets/css/style.css'
 
 const router = useRouter()
 const projects = ref([])
-const loading = ref(true)
+const loading = ref(false)
 const showPanel = ref(false)
-const selectedProject = ref({})
-const isMobile = ref(false)
+const selectedProject = ref(null)
+const isClient = typeof window !== 'undefined'
+const isMobile = ref(isClient ? window.innerWidth < 1024 : false)
+
+const panelFiles = computed(() => (selectedProject.value?.files || []).slice(0, 4))
+const panelTasks = computed(() => (selectedProject.value?.tasks || []).slice(0, 3))
+const progressOffset = computed(() => {
+  const progress = Math.min(Math.max(selectedProject.value?.progress ?? 0, 0), 100)
+  const circumference = 2 * Math.PI * 54
+  return circumference - (progress / 100) * circumference
+})
 
 function statusClass(status) {
-  switch ((status || '').toLowerCase()) {
-    case 'pending': return 'pending'
-    case 'planning': return 'planning'
-    case 'design': return 'design'
-    case 'review': return 'review'
-    case 'construction': return 'construction'
-    case 'completed': return 'completed'
-    case 'archived': return 'archived'
-    default: return ''
+  const map = {
+    pending: 'status-pill pending',
+    planning: 'status-pill planning',
+    design: 'status-pill design',
+    review: 'status-pill review',
+    construction: 'status-pill construction',
+    completed: 'status-pill completed'
   }
+  return map[(status || '').toLowerCase()] || 'status-pill pending'
 }
 
-function openPanel(p) {
-  selectedProject.value = p
-  showPanel.value = true
-  checkMobile()
-  document.body.style.overflow = 'hidden'
+function prettyStatus(status) {
+  return (status || 'pending').replace(/\b\w/g, c => c.toUpperCase())
 }
+
+function taskStatusLabel(status) {
+  const labels = {
+    pending: 'Pending',
+    in_progress: 'In Progress',
+    review: 'In Review',
+    completed: 'Completed'
+  }
+  return labels[(status || '').toLowerCase()] || 'Pending'
+}
+
+function formatDate(value) {
+  if (!value) return 'TBD'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'TBD'
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '—'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const idx = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / 1024 ** idx).toFixed(idx ? 1 : 0)} ${units[idx]}`
+}
+
+function openPanel(project) {
+  selectedProject.value = project
+  showPanel.value = true
+  if (isClient) document.body.style.overflow = 'hidden'
+}
+
 function closePanel() {
   showPanel.value = false
-  document.body.style.overflow = ''
+  if (isClient) document.body.style.overflow = ''
 }
-function openProject(p) {
-  router.push(`/projects/${encodeURIComponent(p.id || p.code)}`)
+
+function openProject(project) {
+  if (!project) return
+  router.push(`/projects/${encodeURIComponent(project.id || project.code || 'project')}`)
   closePanel()
 }
-function formatDate(date) {
-  if (!date) return 'N/A'
-  const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
+
 function checkMobile() {
-  isMobile.value = window.innerWidth <= 600
+  if (!isClient) return
+  isMobile.value = window.innerWidth < 1024
 }
-onMounted(async () => {
-  loading.value = true
-  const userData = localStorage.getItem('domus_user')
+
+async function fetchProjects() {
+  const userData = isClient ? localStorage.getItem('domus_user') : null
   if (!userData) {
     projects.value = []
-    loading.value = false
     return
   }
-  const user = JSON.parse(userData)
+
+  loading.value = true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/admin/projects-for-client?email=${encodeURIComponent(user.email)}`)
-    const data = await res.json()
-    if (data.success && Array.isArray(data.projects)) {
-      projects.value = data.projects
+    const user = JSON.parse(userData)
+    const response = await fetch(
+      `${API_BASE_URL}/api/admin/projects-for-client?email=${encodeURIComponent(user.email)}`,
+      { credentials: 'include' }
+    )
+    const payload = await response.json().catch(() => ({}))
+    if (response.ok && payload.success && Array.isArray(payload.projects)) {
+      projects.value = payload.projects.map(normalizeProject)
     } else {
       projects.value = []
     }
-  } catch (err) {
+  } catch (error) {
+    console.error('Project fetch failed:', error)
     projects.value = []
+  } finally {
+    loading.value = false
   }
-  loading.value = false
-  window.addEventListener('resize', checkMobile)
+}
+
+function normalizeProject(raw = {}) {
+  const safeProgress = Number.isFinite(raw.progress) ? Math.round(raw.progress) : 0
+  const files = Array.isArray(raw.files)
+    ? raw.files.map(file => ({
+        name: file.name || file.title || 'Untitled File',
+        uploadedBy: file.uploadedBy || file.uploader || '',
+        role: file.role || file.uploaderRole || '',
+        uploadedAt: file.uploadedAt || file.createdAt || null,
+        type: file.type || '',
+        size: typeof file.size === 'number' ? file.size : null
+      }))
+    : []
+  const tasks = Array.isArray(raw.tasks)
+    ? raw.tasks.map(task => ({
+        title: task.title || 'Untitled Task',
+        createdBy: task.createdBy || '',
+        assignedTo: task.assignedTo || '',
+        status: task.status || 'pending',
+        due: task.due || task.dueDate || null,
+        priority: task.priority || ''
+      }))
+    : []
+
+  return {
+    id: raw.id || raw._id || `project-${Math.random().toString(36).slice(2)}`,
+    code: raw.code || raw.projectCode || '',
+    name: raw.name || raw.title || 'Untitled Project',
+    status: raw.status || 'pending',
+    phase: raw.phase || '',
+    progress: Math.min(Math.max(safeProgress, 0), 100),
+    startDate: raw.startDate || raw.projectStart || raw.createdAt || null,
+    dueDate: raw.dueDate || raw.projectEnd || raw.updatedAt || null,
+    client: raw.client?.name || raw.clientName || raw.client || '',
+    clientContact: raw.client?.contact || raw.clientContact || '',
+    location: raw.location || raw.site || '',
+    description: raw.description || '',
+    budget: raw.budget || '',
+    area: raw.area || '',
+    architect: raw.architect || raw.leadArchitect || '',
+    manager: raw.manager || raw.projectManager || '',
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    files,
+    tasks,
+    milestones: Array.isArray(raw.milestones) ? raw.milestones : [],
+    theme: raw.theme || { chip: '#2563eb', gradient: 'linear-gradient(135deg, #2563eb 0%, #38bdf8 70%)' }
+  }
+}
+
+onMounted(() => {
+  checkMobile()
+  fetchProjects()
+  if (isClient) window.addEventListener('resize', checkMobile)
+})
+
+onUnmounted(() => {
+  if (isClient) window.removeEventListener('resize', checkMobile)
 })
 </script>
 
-<style scoped>
+<style>
 .projects-wrap {
-  padding: 24px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  position: relative;
+  padding: 32px 32px 48px;
+  background: #f7f9fb;
+  min-height: 100vh;
 }
 .projects-header {
-  width: 100%;
-  max-width: 900px;
-  box-sizing: border-box;
-  padding-left: 16px;
-  padding-right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.eyebrow {
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0;
 }
 .projects-header h1 {
+  font-size: 2.4rem;
+  margin: 8px 0;
+  color: #0f172a;
+}
+.subtitle {
   margin: 0;
-  color: #213547;
-  font-size: 1.8rem;
-  letter-spacing: .5px;
+  color: #475569;
 }
-.projects-header .underline {
-  display: block;
-  width: 120px;
-  height: 3px;
-  background: linear-gradient(90deg, #e6b23a, #f1cf6a);
-  border-radius: 4px;
-  margin-top: 8px;
-  box-shadow: 0 2px 8px #e6b23a55;
-}
-
-.projects-list {
-  margin-top: 18px;
-  width: 100%;
-  max-width: 900px;
-  box-sizing: border-box;
-  padding-left: 16px;
-  padding-right: 16px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.project-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: #fff;
-  border: 1px solid #ececec;
+.refresh-btn {
+  align-self: flex-start;
+  padding: 10px 18px;
   border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 4px 18px rgba(0,0,0,.04);
-  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  border: none;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 10px 26px rgba(37, 99, 235, 0.25);
+}
+.refresh-btn:disabled {
+  background: #94a3b8;
+  cursor: progress;
+  box-shadow: none;
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.loading-state,
+.empty-state {
+  background: white;
+  border-radius: 24px;
+  padding: 80px 24px;
+  text-align: center;
+  color: #475569;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+}
+.loading-state .pulse {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: #2563eb;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.projects-list {
+  display: grid;
+  gap: 18px;
+}
+.project-row {
+  background: white;
+  border-radius: 28px;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  gap: 24px;
+  align-items: center;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border 0.25s ease;
 }
 .project-row:hover {
-  transform: translateY(-1px);
-  border-color: #e6b23a55;
-  box-shadow: 0 8px 28px rgba(0,0,0,.06);
+  transform: translateY(-4px);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.12);
+  border-color: rgba(37, 99, 235, 0.18);
 }
-
-.file-icon {
-  flex: 0 0 56px;
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  background: #fff7e1;
-  border: 1px solid #ffe6a6;
-  border-radius: 12px;
-}
-
 .project-main {
-  min-width: 0;
-  flex: 1 1 auto;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.project-badge {
+  padding: 12px 16px;
+  border-radius: 16px;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .project-title {
   margin: 0;
-  color: #213547;
-  font-size: 1.06rem;
-  font-weight: 700;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 1.4rem;
+  color: #0f172a;
+}
+.project-description {
+  margin: 6px 0 10px;
+  color: #475569;
+}
+.project-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.project-tags li {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 .project-meta {
-  margin-top: 6px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #667085;
-  font-size: .92rem;
+  display: grid;
+  gap: 12px;
 }
-
-.status-pill {
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-weight: 700;
-  letter-spacing: .2px;
-  font-size: .78rem;
+.meta-label {
+  font-size: 0.78rem;
   text-transform: uppercase;
-  border: 1px solid transparent;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  display: block;
 }
-.status-pill.pending      { color:#b36b00; background:#fff7e1; border-color:#ffe6a6; }
-.status-pill.planning     { color:#8a6b00; background:#fff7e1; border-color:#ffe6a6; }
-.status-pill.design       { color:#0b5da3; background:#e9f3ff; border-color:#cfe6ff; }
-.status-pill.review       { color:#6a0596; background:#f6eaff; border-color:#ead6ff; }
-.status-pill.construction { color:#0b7a3b; background:#e8ffee; border-color:#caf5d9; }
-.status-pill.completed    { color:#1f7a1f; background:#ecfaec; border-color:#cfeccc; }
-.status-pill.archived     { color:#888; background:#f3f3f3; border-color:#ddd; }
-
-.project-id {
+.meta-value {
+  color: #1e293b;
   font-weight: 600;
-  color: #8592a3;
-  font-size: .82rem;
+  display: block;
 }
-
-.project-actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-}
-.view-btn {
+.status-pill {
   display: inline-flex;
   align-items: center;
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 9px;
-  border: 1px solid #e6b23a;
-  color: #e6b23a;
-  background: #fff;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 999px;
   font-weight: 700;
-  cursor: pointer;
-  transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .05s ease;
+  font-size: 0.76rem;
+  border: 1px solid transparent;
+  text-transform: uppercase;
 }
-.view-btn:hover {
-  background: #e6b23a;
-  color: #fff;
-  box-shadow: 0 6px 16px #e6b23a4d;
+.status-pill.pending {
+  background: #fff7e1;
+  border-color: #ffd98f;
+  color: #b36b00;
 }
-.view-btn:active { transform: translateY(1px); }
-
-/* Responsive */
-@media (max-width: 1100px) {
-  .projects-header,
-  .projects-list {
-    max-width: 98vw;
-  }
+.status-pill.planning {
+  background: #f7fee7;
+  border-color: #d9f99d;
+  color: #4d7c0f;
 }
-@media (max-width: 600px) {
-  .projects-header,
-  .projects-list {
-    max-width: 100vw;
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-  .project-row {
-    padding: 10px 6px;
-    gap: 10px;
-    border-radius: 9px;
-  }
-  .file-icon {
-    width: 40px; height: 40px; flex-basis: 40px;
-  }
-  .project-title { font-size: .98rem; }
-  .project-meta { flex-wrap: wrap; gap: 6px; }
+.status-pill.design {
+  background: #e0f2fe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
-@media (max-width: 400px) {
-  .projects-header,
-  .projects-list {
-    max-width: 380px;
-    min-width: 0;
-    padding-left: 2px;
-    padding-right: 2px;
-  }
-  .project-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 2px;
-  }
-  .project-actions {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
-  }
+.status-pill.review {
+  background: #fdf4ff;
+  border-color: #f5d0fe;
+  color: #86198f;
 }
-.slide-panel-enter-active, .slide-panel-leave-active {
-  transition: right 0.3s cubic-bezier(.4,0,.2,1), width 0.3s cubic-bezier(.4,0,.2,1);
+.status-pill.construction {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
 }
-.slide-panel-enter-from, .slide-panel-leave-to {
-  right: -100vw;
+.status-pill.completed {
+  background: #edf7ed;
+  border-color: #c8e6c9;
+  color: #1f7a1f;
 }
-.slide-panel-enter-to, .slide-panel-leave-from {
-  right: 0;
+.project-progress {
+  text-align: right;
 }
-
-/* Side panel inside domus-main */
-.side-panel-inside {
-  position: absolute;
+.progress-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+.progress-track {
+  width: 160px;
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin-left: auto;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #38bdf8 100%);
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+.progress-value {
+  margin-top: 6px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.project-panel {
+  position: fixed;
   top: 0;
   right: 0;
-  height: 100%;
   width: 420px;
-  max-width: 100vw;
-  background: #fff;
-  box-shadow: -4px 0 32px #0002;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  border-top-right-radius: 12px;
-  border-bottom-right-radius: 12px;
-  animation: slideIn .3s;
-}
-@keyframes slideIn {
-  from { right: -100vw; }
-  to { right: 0; }
-}
-.side-panel-inside.mobile {
-  width: 100vw !important;
-  max-width: 100vw !important;
-  left: 0;
-  right: 0;
-  border-radius: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.panel-content {
-  padding: 28px 24px 18px 24px;
-  display: flex;
-  flex-direction: column;
   height: 100%;
+  background: #0f172a;
+  color: white;
+  padding: 36px 32px;
   overflow-y: auto;
+  box-shadow: -28px 0 60px rgba(15, 23, 42, 0.45);
+  z-index: 30;
 }
-.panel-header {
+.project-panel.mobile {
+  width: 100%;
+}
+.panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 25;
+}
+.panel-head {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 28px;
 }
-.panel-title-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.panel-eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
 }
-.panel-title {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #213547;
-  line-height: 1.2;
+.panel-head h2 {
+  margin: 6px 0 4px;
+  font-size: 1.6rem;
 }
-.panel-code {
-  font-size: 1rem;
-  color: #e6b23a;
-  font-weight: 600;
-  margin-top: 2px;
+.panel-head p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
 }
 .close-btn {
-  background: none;
+  background: rgba(255, 255, 255, 0.08);
   border: none;
-  color: #e74c3c;
-  font-size: 2rem;
-  font-weight: 700;
+  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  color: white;
   cursor: pointer;
-  line-height: 1;
-  padding: 0 8px;
-  transition: color .15s;
 }
-.close-btn:hover { color: #b71c1c; }
-.panel-section {
-  margin-bottom: 18px;
+.panel-progress {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 24px;
+  padding: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  margin-bottom: 26px;
 }
-.panel-section label {
-  display: block;
-  font-size: .98rem;
-  color: #888;
-  margin-bottom: 2px;
-  font-weight: 600;
+.panel-progress-circle {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto 18px;
 }
-.panel-desc {
-  color: #213547;
-  font-size: 1rem;
-  background: #f7f7f7;
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-top: 2px;
+.panel-progress-circle svg {
+  width: 132px;
+  height: 132px;
+  transform: rotate(-90deg);
 }
-.location-section .location-fields {
+.panel-progress-circle .trail {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 12;
+}
+.panel-progress-circle .stroke {
+  fill: none;
+  stroke: #38bdf8;
+  stroke-width: 12;
+  stroke-linecap: round;
+  stroke-dasharray: 339.292;
+  transition: stroke-dashoffset 0.5s ease;
+}
+.panel-progress-value {
+  position: absolute;
+  inset: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 18px;
-  margin-top: 4px;
+  place-items: center;
+  text-align: center;
 }
-.loc-label {
-  color: #888;
-  font-size: .95rem;
-  font-weight: 600;
-  margin-right: 4px;
+.panel-progress-value span {
+  font-size: 1.8rem;
+  font-weight: 800;
 }
-.loc-value {
-  color: #213547;
-  font-size: .98rem;
-  font-weight: 500;
+.panel-progress-value small {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.7);
 }
-.staff-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.panel-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 18px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
-.staff-label {
-  color: #888;
-  font-size: .95rem;
-  font-weight: 600;
-  margin-right: 4px;
+.panel-stats .label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
-.staff-value {
-  color: #213547;
-  font-size: .98rem;
-  font-weight: 500;
-}
-.panel-actions-vertical {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  align-items: stretch;
-}
-.panel-actions-inline {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  margin-top: 0;
-  margin-bottom: 0;
-  gap: 0;
-}
-.open-btn {
-  background: #e6b23a;
-  color: #fff;
-  border: none;
-  border-radius: 7px;
-  padding: 10px 28px;
+.panel-stats .value {
   font-weight: 700;
+}
+.panel-section {
+  margin-bottom: 26px;
+}
+.panel-section h3 {
+  margin: 0 0 14px;
   font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.panel-team {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+.panel-team .label {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.panel-team .value {
+  font-weight: 600;
+  color: white;
+}
+.panel-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 18px;
+}
+.panel-list .item-title {
+  margin: 0;
+  font-weight: 600;
+}
+.panel-list .item-meta {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+.open-project-btn {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: none;
+  background: linear-gradient(120deg, #2563eb 0%, #38bdf8 100%);
+  font-weight: 700;
+  color: white;
   cursor: pointer;
-  transition: background .15s;
-  margin-top: 0;
-  margin-bottom: 0;
-  width: auto;
+  margin-top: 6px;
+  box-shadow: 0 14px 40px rgba(56, 189, 248, 0.35);
 }
-.open-btn:hover { background: #c4901a; }
+.slide-in-enter-active,
+.slide-in-leave-active {
+  transition: transform 0.3s ease;
+}
+.slide-in-enter-from,
+.slide-in-leave-to {
+  transform: translateX(100%);
+}
 
-@media (max-width: 900px) {
-  .side-panel-inside {
-    width: 340px;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
-@media (max-width: 600px) {
-  .side-panel-inside,
-  .side-panel-inside.mobile {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    left: 0;
-    right: 0;
-    border-radius: 0;
-  }
-  .panel-content {
-    padding: 18px 8px 12px 8px;
-  }
-  .panel-title { font-size: 1.1rem; }
-  .location-section .location-fields {
+@keyframes pulse {
+  0%, 100% { transform: scale(0.85); opacity: 0.4; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 1280px) {
+  .project-row {
     grid-template-columns: 1fr;
-    gap: 6px 0;
+  }
+  .project-progress {
+    text-align: left;
+  }
+  .progress-track {
+    margin-left: 0;
+  }
+}
+@media (max-width: 960px) {
+  .projects-wrap {
+    padding: 24px 18px 36px;
+  }
+  .projects-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .refresh-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .project-row {
+    padding: 20px;
   }
 }
 </style>
