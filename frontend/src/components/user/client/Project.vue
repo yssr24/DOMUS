@@ -204,8 +204,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { API_BASE_URL } from '../../../config'
-import '/src/assets/css/user/Project.css'
-import '/src/assets/css/style.css'
+
 
 const router = useRouter()
 const projects = ref([])
