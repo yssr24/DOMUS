@@ -100,13 +100,14 @@ async function resendCode() {
                   :disabled="verifying"
                 />
                 <button
-                  type="submit"
+                  type="button"
                   class="login-btn"
-                  style="width:auto; padding:8px 18px; font-size:1rem;"
-                  :disabled="verifying"
+                  style="width:auto; padding:8px 18px; font-size:1rem; background:#e6b23a; color:#213547;"
+                  :disabled="sending"
+                  @click="resendCode"
                 >
-                  <span v-if="verifying">Verifying...</span>
-                  <span v-else>Verify</span>
+                  <span v-if="sending">Sending...</span>
+                  <span v-else>Send Another Code</span>
                 </button>
               </div>
             </div>
@@ -114,14 +115,15 @@ async function resendCode() {
           <div style="font-size:0.95rem; color:#555e6a; text-align:center;">
             Please check your email for the verification code.
           </div>
-          <button
-            class="login-btn"
-            style="margin-top: 18px; width: 100%; background:#e6b23a; color:#213547;"
-            :disabled="sending"
-            @click="resendCode"
-          >
-            {{ sending ? 'Sending...' : 'Send Another Code' }}
-          </button>
+            <button
+              type="submit"
+              class="login-btn"
+              style="width:100%; padding:10px; font-size:1rem;"
+              :disabled="verifying"
+            >
+              <span v-if="verifying">Verifying...</span>
+              <span v-else>Verify</span>
+            </button>
           <div v-if="resendMsg" style="margin-top:10px; color:#e6b23a; text-align:center;">
             {{ resendMsg }}
           </div>
