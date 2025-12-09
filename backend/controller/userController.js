@@ -145,7 +145,7 @@ exports.forgotPassword = async (req, res) => {
   html = html.replace('CHANGE_PASSWORD_LINK', `<a href="${changeLink}" style="color:#e6b23a;">Change Password</a>`)
   // Send email
   await transporter.sendMail({
-    from: `"DOMUS" <${process.env.EMAIL_USER}>`,
+    from: `"DOMUS" <${process.env.EMAIL_FROM}>`,
     to: email,
     subject: 'DOMUS Password Reset',
     html
