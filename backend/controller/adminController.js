@@ -891,3 +891,130 @@ exports.getProjectStats = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch project stats.' })
   }
 }
+exports.getOverviewStats = async (req, res) => {
+  try {
+    const db = admin.firestore()
+    
+    // Get all users
+    const usersSnapshot = await db.collection('users').get()
+    let totalUsers = 0
+    let totalClients = 0
+
+    usersSnapshot.forEach(doc => {
+      const data = doc.data()
+      totalUsers++
+      if (data.role === 'client') {
+        totalClients++
+      }
+    })
+
+    // Get active users from userStatus collection
+    const statusSnapshot = await db.collection('userStatus').where('state', '==', 'online').get()
+    const activeUsers = statusSnapshot.size
+
+    // Get total projects
+    const projectsSnapshot = await db.collection('projects').get()
+    const totalProjects = projectsSnapshot.size
+
+    res.json({
+      success: true,
+      totalUsers,
+      activeUsers,
+      totalProjects,
+      totalClients
+    })
+  } catch (err) {
+    console.error('Error fetching overview stats:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch overview stats.' })
+  }
+}
+
+// Get project stats by status
+exports.getProjectStats = async (req, res) => {
+  try {
+    const db = admin.firestore()
+    const snapshot = await db.collection('projects').get()
+
+    const statusCounts = {
+      inProgress: 0,
+      completed: 0,
+      pending: 0,
+      onHold: 0
+    }
+
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      const status = (data.status || '').toLowerCase().replace(/[^a-z]/g, '')
+      
+      if (status === 'inprogress' || status === 'in-progress' || status === 'ongoing') {
+        statusCounts.inProgress++
+      } else if (status === 'completed' || status === 'done' || status === 'finished') {
+        statusCounts.completed++
+      } else if (status === 'onhold' || status === 'on-hold' || status === 'hold' || status === 'paused') {
+        statusCounts.onHold++
+      } else {
+        statusCounts.pending++ // default to pending
+      }
+    })
+
+    res.json({
+      success: true,
+      ...statusCounts
+    })
+  } catch (err) {
+    console.error('Error fetching project stats:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch project stats.' })
+  }
+}
+
+// Get user registration stats for last 7 days
+exports.getUserRegistrationStats = async (req, res) => {
+  try {
+    const db = admin.firestore()
+    const snapshot = await db.collection('users').get()
+    
+    // Get last 7 days
+    const days = []
+    const counts = {}
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      const key = date.toISOString().slice(0, 10)
+      const dayName = dayNames[date.getDay()]
+      days.push({ key, label: dayName })
+      counts[key] = 0
+    }
+
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      if (data.createdAt) {
+        let createdDate
+        // Handle Firestore Timestamp
+        if (data.createdAt._seconds) {
+          createdDate = new Date(data.createdAt._seconds * 1000)
+        } else if (data.createdAt.toDate) {
+          createdDate = data.createdAt.toDate()
+        } else {
+          createdDate = new Date(data.createdAt)
+        }
+        
+        const key = createdDate.toISOString().slice(0, 10)
+        if (counts.hasOwnProperty(key)) {
+          counts[key]++
+        }
+      }
+    })
+
+    const data = days.map(d => ({
+      label: d.label,
+      count: counts[d.key]
+    }))
+
+    res.json({ success: true, data })
+  } catch (err) {
+    console.error('Error fetching user registration stats:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch user registration stats.' })
+  }
+}

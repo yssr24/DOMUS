@@ -92,11 +92,29 @@
       <div class="ov-charts">
         <div class="chart-card">
           <h3>User Registrations (Last 7 Days)</h3>
-          <apexchart type="bar" height="220" :options="userChartOptions" :series="userChartSeries" />
+          <apexchart
+            v-if="userChartSeries[0].data.length > 0"
+            type="bar"
+            height="250"
+            :options="userChartOptions"
+            :series="userChartSeries"
+          />
+          <div v-else style="text-align: center; padding: 40px; color: #888;">
+            No registration data available
+          </div>
         </div>
         <div class="chart-card">
           <h3>Projects by Status</h3>
-          <apexchart type="donut" height="220" :options="projChartOptions" :series="projChartSeries" />
+          <apexchart
+            v-if="projChartSeries.some(v => v > 0)"
+            type="donut"
+            height="250"
+            :options="projChartOptions"
+            :series="projChartSeries"
+          />
+          <div v-else style="text-align: center; padding: 40px; color: #888;">
+            No project data available
+          </div>
         </div>
       </div>
 
@@ -116,18 +134,20 @@
             </thead>
             <tbody>
               <tr v-for="user in recentUsers" :key="user.id || user.email">
-                <td>{{ user.lastname || '' }}, {{ user.firstname || '' }}</td>
-                <td class="mono">{{ user.email }}</td>
-                <td>{{ user.role || 'user' }}</td>
+                <td>{{ formatName(user) }}</td>
+                <td class="mono">{{ user.email || 'N/A' }}</td>
+                <td style="text-transform: capitalize;">{{ user.role || 'user' }}</td>
                 <td>
-                  <span :class="['pill', user.status === 'online' || user.status === 'active' ? 'online' : 'offline']">
+                  <span :class="['pill', getStatusClass(user.status)]">
                     {{ user.status || 'offline' }}
                   </span>
                 </td>
                 <td>{{ formatDate(user.createdAt) }}</td>
               </tr>
               <tr v-if="recentUsers.length === 0">
-                <td colspan="5" style="text-align: center; color: #888;">No users found</td>
+                <td colspan="5" style="text-align: center; color: #888; padding: 30px;">
+                  No users found
+                </td>
               </tr>
             </tbody>
           </table>
@@ -156,13 +176,39 @@ const {
   loadAllData
 } = useOverview()
 
-function formatDate(date) {
-  if (!date) return 'N/A'
+function formatName(user) {
+  if (user.name) return user.name
+  if (user.lastname || user.firstname) {
+    return `${user.lastname || ''}, ${user.firstname || ''}`.trim()
+  }
+  return user.email?.split('@')[0] || 'Unknown'
+}
+
+function formatDate(dateValue) {
+  if (!dateValue) return 'N/A'
   try {
-    return new Date(date).toLocaleDateString()
+    // Handle Firestore Timestamp object
+    if (dateValue._seconds) {
+      return new Date(dateValue._seconds * 1000).toLocaleDateString()
+    }
+    // Handle Firestore Timestamp with toDate method
+    if (typeof dateValue.toDate === 'function') {
+      return dateValue.toDate().toLocaleDateString()
+    }
+    // Handle ISO string or other date formats
+    const date = new Date(dateValue)
+    if (isNaN(date.getTime())) return 'N/A'
+    return date.toLocaleDateString()
   } catch {
     return 'N/A'
   }
+}
+
+function getStatusClass(status) {
+  if (!status) return 'offline'
+  const s = status.toLowerCase()
+  if (s === 'online' || s === 'active') return 'online'
+  return 'offline'
 }
 </script>
 
