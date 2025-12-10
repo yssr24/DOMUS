@@ -406,6 +406,8 @@ exports.getNotifications = async (req, res) => {
 
 // ...existing code...
 
+// ...existing code...
+
 // Get project detail with tasks and submissions
 exports.getProjectDetail = async (req, res) => {
   try {
@@ -459,17 +461,15 @@ exports.getProjectDetail = async (req, res) => {
       })
     })
 
-    // Get staff's submissions for this project
+    // Get staff's submissions - fetch without orderBy to avoid index requirement
     const subsSnap = await db.collection('staffSubmissions')
       .where('projectId', '==', projectId)
       .where('staffId', '==', staffId)
-      .orderBy('createdAt', 'desc')
       .get()
 
-    const submissions = []
-    const taskIds = new Set(tasks.map(t => t.id))
     const taskMap = Object.fromEntries(tasks.map(t => [t.id, t.title]))
 
+    let submissions = []
     subsSnap.forEach(doc => {
       const d = doc.data()
       submissions.push({
@@ -480,12 +480,21 @@ exports.getProjectDetail = async (req, res) => {
       })
     })
 
+    // Sort submissions by createdAt descending in JavaScript
+    submissions.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return dateB - dateA
+    })
+
     res.json({ success: true, data: { project, tasks, submissions } })
   } catch (err) {
     console.error('getProjectDetail error:', err)
     res.status(500).json({ success: false, message: 'Failed to fetch project detail.' })
   }
 }
+
+// ...existing code...
 
 // Submit files for a task
 exports.submitFiles = async (req, res) => {
