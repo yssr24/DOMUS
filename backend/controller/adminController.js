@@ -1756,3 +1756,574 @@ exports.uploadFile = async (req, res) => {
 }
 
 // ...existing code...
+// ...existing code...
+
+// ========================
+// INVOICE / BILLING MANAGEMENT
+// ========================
+
+// Get all invoices
+exports.getInvoices = async (req, res) => {
+  try {
+    const db = admin.firestore()
+    const invoicesSnap = await db.collection('invoices').orderBy('createdAt', 'desc').get()
+    
+    const invoices = []
+    for (const doc of invoicesSnap.docs) {
+      const data = doc.data()
+      
+      // Get project info
+      let projectName = '—'
+      if (data.projectId) {
+        const projectDoc = await db.collection('projects').doc(data.projectId).get()
+        if (projectDoc.exists) {
+          const p = projectDoc.data()
+          projectName = `${p.code || ''} - ${p.title || 'Untitled'}`.trim()
+        }
+      }
+      
+      invoices.push({
+        id: doc.id,
+        ...data,
+        projectName,
+        createdAt: data.createdAt?.toDate?.() || data.createdAt,
+        dueDate: data.dueDate?.toDate?.() || data.dueDate,
+        paidDate: data.paidDate?.toDate?.() || data.paidDate,
+        invoiceDate: data.invoiceDate?.toDate?.() || data.invoiceDate
+      })
+    }
+    
+    res.json({ success: true, data: invoices })
+  } catch (err) {
+    console.error('getInvoices error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch invoices.' })
+  }
+}
+
+// Get single invoice
+exports.getInvoice = async (req, res) => {
+  try {
+    const { id } = req.params
+    const db = admin.firestore()
+    
+    const invoiceDoc = await db.collection('invoices').doc(id).get()
+    if (!invoiceDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' })
+    }
+    
+    const data = invoiceDoc.data()
+    
+    // Get project info
+    let projectName = '—'
+    if (data.projectId) {
+      const projectDoc = await db.collection('projects').doc(data.projectId).get()
+      if (projectDoc.exists) {
+        const p = projectDoc.data()
+        projectName = `${p.code || ''} - ${p.title || 'Untitled'}`.trim()
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        id: invoiceDoc.id,
+        ...data,
+        projectName,
+        createdAt: data.createdAt?.toDate?.() || data.createdAt,
+        dueDate: data.dueDate?.toDate?.() || data.dueDate,
+        paidDate: data.paidDate?.toDate?.() || data.paidDate,
+        invoiceDate: data.invoiceDate?.toDate?.() || data.invoiceDate
+      }
+    })
+  } catch (err) {
+    console.error('getInvoice error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch invoice.' })
+  }
+}
+
+// Upload invoice file
+exports.uploadInvoice = async (req, res) => {
+  try {
+    const { projectId, vendor, uploadedBy } = req.body
+    const file = req.file
+    
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' })
+    }
+    
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'Project is required' })
+    }
+    
+    const db = admin.firestore()
+    const bucket = admin.storage().bucket()
+    
+    // Get project info
+    const projectDoc = await db.collection('projects').doc(projectId).get()
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Project not found' })
+    }
+    const project = projectDoc.data()
+    
+    // Generate invoice number
+    const invoicesSnap = await db.collection('invoices').orderBy('number', 'desc').limit(1).get()
+    let nextNum = 1
+    if (!invoicesSnap.empty) {
+      const lastInvoice = invoicesSnap.docs[0].data()
+      const match = lastInvoice.number?.match(/INV-(\d+)/)
+      if (match) nextNum = parseInt(match[1], 10) + 1
+    }
+    const invoiceNumber = `INV-${String(nextNum).padStart(5, '0')}`
+    
+    // Upload file to Firebase Storage
+    const ext = file.originalname.split('.').pop().toLowerCase()
+    const timestamp = Date.now()
+    const storagePath = `invoices/${projectId}/${timestamp}_${invoiceNumber}.${ext}`
+    const fileRef = bucket.file(storagePath)
+    const token = crypto.randomUUID()
+    
+    await fileRef.save(file.buffer, {
+      resumable: false,
+      contentType: file.mimetype,
+      metadata: {
+        contentType: file.mimetype,
+        metadata: {
+          firebaseStorageDownloadTokens: token,
+          originalName: file.originalname,
+          uploadedBy: uploadedBy || 'admin'
+        }
+      }
+    })
+    
+    const encodedPath = encodeURIComponent(storagePath)
+    const fileUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`
+    
+    // Create invoice document (initially unparsed)
+    const invoiceData = {
+      number: invoiceNumber,
+      invoiceNumber: invoiceNumber,
+      projectId,
+      projectCode: project.code || projectId,
+      vendor: vendor || '',
+      fileName: file.originalname,
+      fileUrl,
+      storagePath,
+      fileSize: file.size,
+      fileType: file.mimetype,
+      status: 'pending',
+      parsed: false,
+      totalAmount: null,
+      invoiceDate: null,
+      dueDate: null,
+      lineItems: [],
+      uploadedBy: uploadedBy || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }
+    
+    const invoiceRef = await db.collection('invoices').add(invoiceData)
+    
+    // Send to Parsio for OCR processing
+    try {
+      await sendToParsio(fileUrl, invoiceRef.id, file.mimetype)
+    } catch (parsioErr) {
+      console.error('Parsio send error:', parsioErr)
+      // Continue even if Parsio fails - manual entry can be done later
+    }
+    
+    // Create notification
+    await db.collection('notifications').add({
+      userId: uploadedBy || 'admin',
+      projectId,
+      type: 'invoice_uploaded',
+      message: `Invoice ${invoiceNumber} uploaded for project ${project.code || project.title}`,
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+    
+    res.json({
+      success: true,
+      invoiceId: invoiceRef.id,
+      data: {
+        id: invoiceRef.id,
+        ...invoiceData,
+        createdAt: new Date().toISOString()
+      }
+    })
+    
+  } catch (err) {
+    console.error('uploadInvoice error:', err)
+    res.status(500).json({ success: false, message: err.message || 'Failed to upload invoice.' })
+  }
+}
+
+// Send file to Parsio for parsing
+async function sendToParsio(fileUrl, invoiceId, mimeType) {
+  const PARSIO_API_KEY = process.env.PARSIO_API_KEY
+  const PARSIO_MAILBOX_ID = process.env.PARSIO_MAILBOX_ID
+  
+  if (!PARSIO_API_KEY || !PARSIO_MAILBOX_ID) {
+    console.warn('Parsio credentials not configured')
+    return
+  }
+  
+  const fetch = (await import('node-fetch')).default
+  
+  // Parsio API endpoint for document upload
+  const parsioUrl = `https://api.parsio.io/mailboxes/${PARSIO_MAILBOX_ID}/documents`
+  
+  const response = await fetch(parsioUrl, {
+    method: 'POST',
+    headers: {
+      'X-API-Key': PARSIO_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      url: fileUrl,
+      metadata: {
+        invoiceId: invoiceId,
+        source: 'domus_billing'
+      }
+    })
+  })
+  
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Parsio API error: ${response.status} - ${errorText}`)
+  }
+  
+  const result = await response.json()
+  console.log('Parsio document submitted:', result)
+  return result
+}
+
+// Parsio webhook handler - receives parsed invoice data
+exports.parsioWebhook = async (req, res) => {
+  try {
+    const webhookData = req.body
+    console.log('Parsio webhook received:', JSON.stringify(webhookData, null, 2))
+    
+    // Extract invoice ID from metadata
+    const invoiceId = webhookData.metadata?.invoiceId || webhookData.custom?.invoiceId
+    
+    if (!invoiceId) {
+      console.error('No invoiceId in Parsio webhook payload')
+      return res.status(400).json({ success: false, message: 'Missing invoiceId' })
+    }
+    
+    const db = admin.firestore()
+    const invoiceRef = db.collection('invoices').doc(invoiceId)
+    const invoiceDoc = await invoiceRef.get()
+    
+    if (!invoiceDoc.exists) {
+      console.error('Invoice not found:', invoiceId)
+      return res.status(404).json({ success: false, message: 'Invoice not found' })
+    }
+    
+    // Extract parsed data from Parsio response
+    // Parsio field names may vary based on your template configuration
+    const parsedData = webhookData.parsed || webhookData.data || webhookData
+    
+    const extractedData = {
+      parsed: true,
+      parsedAt: admin.firestore.FieldValue.serverTimestamp(),
+      
+      // Common invoice fields - adjust based on your Parsio template
+      invoiceNumber: parsedData.invoice_number || parsedData.invoiceNumber || parsedData.number || invoiceDoc.data().invoiceNumber,
+      vendor: parsedData.vendor || parsedData.supplier || parsedData.company_name || parsedData.from || invoiceDoc.data().vendor,
+      
+      // Amount fields
+      totalAmount: parseAmount(parsedData.total || parsedData.total_amount || parsedData.grand_total || parsedData.amount),
+      subtotal: parseAmount(parsedData.subtotal || parsedData.sub_total),
+      tax: parseAmount(parsedData.tax || parsedData.vat || parsedData.tax_amount),
+      
+      // Date fields
+      invoiceDate: parseDate(parsedData.invoice_date || parsedData.date || parsedData.issue_date),
+      dueDate: parseDate(parsedData.due_date || parsedData.payment_due),
+      
+      // Additional fields
+      currency: parsedData.currency || 'PHP',
+      description: parsedData.description || parsedData.memo || '',
+      poNumber: parsedData.po_number || parsedData.purchase_order || '',
+      
+      // Line items
+      lineItems: parseLineItems(parsedData.line_items || parsedData.items || parsedData.lines || []),
+      
+      // Raw parsed data for reference
+      rawParsedData: parsedData,
+      
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }
+    
+    // Update invoice document
+    await invoiceRef.update(extractedData)
+    
+    // Create notification about successful parsing
+    const invoice = invoiceDoc.data()
+    if (invoice.uploadedBy) {
+      await db.collection('notifications').add({
+        userId: invoice.uploadedBy,
+        projectId: invoice.projectId,
+        type: 'invoice_parsed',
+        message: `Invoice ${invoice.invoiceNumber} has been parsed. Total: ₱${(extractedData.totalAmount || 0).toLocaleString()}`,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      })
+    }
+    
+    console.log('Invoice updated with parsed data:', invoiceId)
+    res.json({ success: true, message: 'Webhook processed successfully' })
+    
+  } catch (err) {
+    console.error('parsioWebhook error:', err)
+    res.status(500).json({ success: false, message: 'Webhook processing failed' })
+  }
+}
+
+// Helper function to parse amount
+function parseAmount(value) {
+  if (!value) return null
+  if (typeof value === 'number') return value
+  
+  // Remove currency symbols and commas
+  const cleaned = String(value).replace(/[₱$€£,\s]/g, '').trim()
+  const parsed = parseFloat(cleaned)
+  
+  return isNaN(parsed) ? null : parsed
+}
+
+// Helper function to parse date
+function parseDate(value) {
+  if (!value) return null
+  
+  try {
+    const date = new Date(value)
+    if (isNaN(date.getTime())) return null
+    return admin.firestore.Timestamp.fromDate(date)
+  } catch {
+    return null
+  }
+}
+
+// Helper function to parse line items
+function parseLineItems(items) {
+  if (!Array.isArray(items)) return []
+  
+  return items.map((item, index) => ({
+    lineNumber: index + 1,
+    description: item.description || item.item || item.name || '',
+    quantity: parseFloat(item.quantity || item.qty || 1) || 1,
+    unitPrice: parseAmount(item.unit_price || item.price || item.rate),
+    amount: parseAmount(item.amount || item.total || item.line_total),
+    unit: item.unit || item.uom || ''
+  })).filter(item => item.description || item.amount)
+}
+
+// Mark invoice as paid
+exports.markInvoicePaid = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { paidDate, paymentMethod, paymentReference } = req.body
+    
+    const db = admin.firestore()
+    const invoiceRef = db.collection('invoices').doc(id)
+    const invoiceDoc = await invoiceRef.get()
+    
+    if (!invoiceDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' })
+    }
+    
+    const invoice = invoiceDoc.data()
+    
+    await invoiceRef.update({
+      status: 'paid',
+      paidDate: paidDate ? admin.firestore.Timestamp.fromDate(new Date(paidDate)) : admin.firestore.FieldValue.serverTimestamp(),
+      paymentMethod: paymentMethod || 'unknown',
+      paymentReference: paymentReference || '',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+    
+    // Create notification
+    if (invoice.projectId) {
+      const projectDoc = await db.collection('projects').doc(invoice.projectId).get()
+      if (projectDoc.exists) {
+        const project = projectDoc.data()
+        
+        // Notify client
+        if (project.clientId) {
+          await db.collection('notifications').add({
+            userId: project.clientId,
+            projectId: invoice.projectId,
+            type: 'invoice_paid',
+            message: `Invoice ${invoice.invoiceNumber} for project ${project.code || project.title} has been marked as paid.`,
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          })
+        }
+      }
+    }
+    
+    res.json({ success: true, message: 'Invoice marked as paid' })
+    
+  } catch (err) {
+    console.error('markInvoicePaid error:', err)
+    res.status(500).json({ success: false, message: 'Failed to update invoice.' })
+  }
+}
+
+// Update invoice details
+exports.updateInvoice = async (req, res) => {
+  try {
+    const { id } = req.params
+    const updates = req.body
+    
+    const db = admin.firestore()
+    const invoiceRef = db.collection('invoices').doc(id)
+    const invoiceDoc = await invoiceRef.get()
+    
+    if (!invoiceDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' })
+    }
+    
+    // Allowed fields to update
+    const allowedFields = ['vendor', 'totalAmount', 'subtotal', 'tax', 'invoiceDate', 'dueDate', 'description', 'poNumber', 'status', 'lineItems']
+    const filteredUpdates = {}
+    
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        if (['invoiceDate', 'dueDate'].includes(field) && updates[field]) {
+          filteredUpdates[field] = admin.firestore.Timestamp.fromDate(new Date(updates[field]))
+        } else {
+          filteredUpdates[field] = updates[field]
+        }
+      }
+    }
+    
+    filteredUpdates.updatedAt = admin.firestore.FieldValue.serverTimestamp()
+    
+    await invoiceRef.update(filteredUpdates)
+    
+    res.json({ success: true, message: 'Invoice updated successfully' })
+    
+  } catch (err) {
+    console.error('updateInvoice error:', err)
+    res.status(500).json({ success: false, message: 'Failed to update invoice.' })
+  }
+}
+
+// Delete invoice
+exports.deleteInvoice = async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    const db = admin.firestore()
+    const bucket = admin.storage().bucket()
+    
+    const invoiceDoc = await db.collection('invoices').doc(id).get()
+    if (!invoiceDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' })
+    }
+    
+    const invoice = invoiceDoc.data()
+    
+    // Delete file from storage
+    if (invoice.storagePath) {
+      try {
+        await bucket.file(invoice.storagePath).delete()
+      } catch (e) {
+        console.error('Failed to delete file from storage:', e)
+      }
+    }
+    
+    // Delete invoice document
+    await db.collection('invoices').doc(id).delete()
+    
+    res.json({ success: true, message: 'Invoice deleted successfully' })
+    
+  } catch (err) {
+    console.error('deleteInvoice error:', err)
+    res.status(500).json({ success: false, message: 'Failed to delete invoice.' })
+  }
+}
+
+// Get billing summary/stats
+exports.getBillingStats = async (req, res) => {
+  try {
+    const db = admin.firestore()
+    const invoicesSnap = await db.collection('invoices').get()
+    
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    
+    let totalRevenue = 0
+    let revenueThisMonth = 0
+    let outstandingAmount = 0
+    let overdueAmount = 0
+    let paidThisMonth = 0
+    let pendingCount = 0
+    let overdueCount = 0
+    let paidCount = 0
+    
+    const monthlyRevenue = new Array(12).fill(0)
+    
+    invoicesSnap.forEach(doc => {
+      const inv = doc.data()
+      const amount = inv.totalAmount || 0
+      
+      // Get dates
+      const dueDate = inv.dueDate?.toDate?.() || (inv.dueDate ? new Date(inv.dueDate) : null)
+      const paidDate = inv.paidDate?.toDate?.() || (inv.paidDate ? new Date(inv.paidDate) : null)
+      
+      // Check if overdue
+      const isOverdue = inv.status !== 'paid' && dueDate && dueDate < now
+      
+      if (inv.status === 'paid') {
+        paidCount++
+        totalRevenue += amount
+        
+        if (paidDate) {
+          // Monthly revenue chart
+          if (paidDate.getFullYear() === currentYear) {
+            monthlyRevenue[paidDate.getMonth()] += amount
+          }
+          
+          // This month
+          if (paidDate.getMonth() === currentMonth && paidDate.getFullYear() === currentYear) {
+            paidThisMonth += amount
+            revenueThisMonth += amount
+          }
+        }
+      } else if (isOverdue) {
+        overdueCount++
+        overdueAmount += amount
+        outstandingAmount += amount
+      } else {
+        pendingCount++
+        outstandingAmount += amount
+      }
+    })
+    
+    res.json({
+      success: true,
+      data: {
+        totalRevenue,
+        revenueThisMonth,
+        outstandingAmount,
+        overdueAmount,
+        paidThisMonth,
+        pendingCount,
+        overdueCount,
+        paidCount,
+        totalCount: invoicesSnap.size,
+        monthlyRevenue
+      }
+    })
+    
+  } catch (err) {
+    console.error('getBillingStats error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch billing stats.' })
+  }
+}
+
+// ...existing code...

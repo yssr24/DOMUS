@@ -294,7 +294,7 @@ function onImageError() {
 }
 
 function goBack() {
-  router.push('/admin/files')
+  router.push('/admin/file-and-document')
 }
 
 function downloadFile() {

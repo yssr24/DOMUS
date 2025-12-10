@@ -68,4 +68,19 @@ router.post('/upload-file', upload.single('file'), adminController.uploadFile)
 router.get('/stream-file', adminController.streamFile)
 
 
+// ...existing code...
+
+// Invoice/Billing routes
+router.get('/invoices', adminController.getInvoices)
+router.get('/invoice/:id', adminController.getInvoice)
+router.post('/upload-invoice', upload.single('file'), adminController.uploadInvoice)
+router.post('/invoice/:id/mark-paid', adminController.markInvoicePaid)
+router.put('/invoice/:id', adminController.updateInvoice)
+router.delete('/invoice/:id', adminController.deleteInvoice)
+router.get('/billing-stats', adminController.getBillingStats)
+
+// Parsio webhook (no auth required for webhook)
+router.post('/webhook/parsio', adminController.parsioWebhook)
+
+module.exports = router
 module.exports = router
