@@ -2,9 +2,26 @@ const express = require('express')
 const router = express.Router()
 const adminController = require('../controller/adminController')
 const multer = require('multer')
-const upload = multer({
+const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 10 }
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+      'application/pdf',
+      'text/csv', 'application/vnd.ms-excel',
+      'application/acad', 'application/x-acad', 'application/autocad_dwg', 'image/vnd.dwg', 'application/dwg', 'application/x-dwg',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ]
+    // Also allow by extension for DWG files
+    const ext = file.originalname.split('.').pop().toLowerCase()
+    if (allowedTypes.includes(file.mimetype) || ['dwg', 'csv', 'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'doc', 'docx', 'xls', 'xlsx'].includes(ext)) {
+      cb(null, true)
+    } else {
+      cb(new Error('Invalid file type. Allowed: images, PDF, CSV, DWG, DOC, XLS'), false)
+    }
+  }
 })
 
 // ...existing code...
@@ -45,6 +62,8 @@ router.post('/remove-staff', adminController.removeStaffFromProject)
 router.get('/notifications', adminController.getAdminNotifications)
 router.post('/mark-notification-read', adminController.markNotificationRead)
 router.post('/mark-all-notifications-read', adminController.markAllNotificationsRead)
+
+router.post('/upload-file', upload.single('file'), adminController.uploadFile)
 
 
 
