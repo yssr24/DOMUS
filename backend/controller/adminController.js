@@ -809,3 +809,85 @@ exports.submitContactMessage = async (req, res) => {
   }
 }
 // ...existing code...
+exports.getOverviewStats = async (req, res) => {
+  try {
+    const usersRef = admin.firestore().collection('users')
+    const userStatusRef = admin.firestore().collection('userStatus')
+    const projectsRef = admin.firestore().collection('projects')
+
+    // Get all users
+    const usersSnapshot = await usersRef.get()
+    let totalUsers = 0
+    let totalClients = 0
+
+    usersSnapshot.forEach(doc => {
+      const data = doc.data()
+      totalUsers++
+      if (data.role === 'client') {
+        totalClients++
+      }
+    })
+
+    // Get active users (online status)
+    const statusSnapshot = await userStatusRef.where('state', '==', 'online').get()
+    const activeUsers = statusSnapshot.size
+
+    // Get total projects
+    const projectsSnapshot = await projectsRef.get()
+    const totalProjects = projectsSnapshot.size
+
+    res.json({
+      success: true,
+      totalUsers,
+      activeUsers,
+      totalProjects,
+      totalClients
+    })
+  } catch (err) {
+    console.error('Error fetching overview stats:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch overview stats.' })
+  }
+}
+
+// Get project stats by status
+exports.getProjectStats = async (req, res) => {
+  try {
+    const projectsRef = admin.firestore().collection('projects')
+    const snapshot = await projectsRef.get()
+
+    const statusCounts = {
+      pending: 0,
+      design: 0,
+      review: 0,
+      construction: 0,
+      completed: 0
+    }
+
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      const status = (data.status || 'pending').toLowerCase()
+      
+      if (status === 'pending' || status === 'planning') {
+        statusCounts.pending++
+      } else if (status === 'design') {
+        statusCounts.design++
+      } else if (status === 'review' || status === 'on review' || status === 'in review') {
+        statusCounts.review++
+      } else if (status === 'construction' || status === 'in-progress') {
+        statusCounts.construction++
+      } else if (status === 'completed' || status === 'done') {
+        statusCounts.completed++
+      } else {
+        statusCounts.pending++ // default to pending
+      }
+    })
+
+    res.json({
+      success: true,
+      ...statusCounts
+    })
+  } catch (err) {
+    console.error('Error fetching project stats:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch project stats.' })
+  }
+}

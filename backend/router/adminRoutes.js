@@ -10,6 +10,8 @@ const upload = multer({
 router.get('/user-role-counts', adminController.getUserRoleCounts)
 router.get('/user-stats', adminController.getUserStats)
 router.get('/client-stats', adminController.getClientStats)
+router.get('/overview-stats', adminController.getOverviewStats) // NEW
+
 router.post('/update-status', adminController.updateUserStatus)
 router.get('/users-with-status', adminController.getUsersWithStatus)
 router.post('/add-user-direct', adminController.addUserDirect)

@@ -1,0 +1,273 @@
+.overview-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px #e6b23a22;
+}
+
+.ov-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ov-header h2 {
+  margin: 0;
+  color: #213547;
+}
+
+.ov-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn.dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #e1e6f0;
+  background: #fff;
+  color: #1a3a6a;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.btn.dl:hover {
+  background: #f8fafc;
+}
+
+.btn.dl:active {
+  transform: translateY(1px);
+}
+
+.btn.dl.pdf {
+  border-color: #1976d233;
+}
+
+.btn.dl.csv {
+  border-color: #43a04733;
+}
+
+.ov-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ov-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 12px #00000012;
+  border: 1px solid #f0f0f0;
+}
+
+.ov-card .icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.ov-card .icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.ov-card .info {
+  display: flex;
+  flex-direction: column;
+}
+
+.ov-card .label {
+  color: #5a6675;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.ov-card .value {
+  color: #213547;
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+
+.ov-card.users .icon {
+  background: #e3f0fc;
+}
+
+.ov-card.active .icon {
+  background: #eafaf0;
+}
+
+.ov-card.projects .icon {
+  background: #fff7e1;
+}
+
+.ov-card.clients .icon {
+  background: #f6eaff;
+}
+
+.ov-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.chart-card {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px #00000010;
+  padding: 16px;
+}
+
+.chart-card h3 {
+  margin: 0 0 10px;
+  color: #213547;
+  font-size: 1.1rem;
+}
+
+.ov-table-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px #0000000f;
+  border: 1px solid #f0f0f0;
+  padding: 12px;
+}
+
+.ov-table-card h3 {
+  margin: 0 0 10px 0;
+  color: #213547;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.ov-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ov-table thead th {
+  padding: 12px 10px;
+  text-align: left;
+  font-weight: 700;
+  color: #1a3a6a;
+  background: #f5f7fb;
+  border-bottom: 2px solid #e1e6f0;
+  white-space: nowrap;
+}
+
+.ov-table tbody td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #f5f5f5;
+  color: #213547;
+}
+
+.ov-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pill.active {
+  color: #1f7a1f;
+  background: #ecfaec;
+  border-color: #cfeccc;
+}
+
+.pill.inactive,
+.pill.offline {
+  color: #888;
+  background: #f3f3f3;
+  border-color: #ddd;
+}
+
+.pill.online {
+  color: #1f7a1f;
+  background: #ecfaec;
+  border-color: #cfeccc;
+}
+
+.mono {
+  font-family: ui-monospace, Menlo, Consolas, Monaco, monospace;
+}
+
+.loading-state,
+.error-state {
+  text-align: center;
+  padding: 40px;
+  color: #5a6675;
+}
+
+.error-state {
+  color: #c62828;
+}
+
+.refresh-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.refresh-btn:hover {
+  background: #1565c0;
+}
+
+@media (max-width: 900px) {
+  .ov-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ov-charts {
+    grid-template-columns: 1fr;
+  }
+
+  .ov-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .ov-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .ov-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .btn.dl span {
+    display: none;
+  }
+}
