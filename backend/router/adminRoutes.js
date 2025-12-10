@@ -35,5 +35,7 @@ router.get('/overview-stats', adminController.getOverviewStats)
 router.get('/user-registration-stats', adminController.getUserRegistrationStats)
 router.get('/projects-by-status', adminController.getProjectsByStatus)
 router.get('/recent-users', adminController.getRecentUsers)
+router.get('/project-details/:id', adminController.getProjectDetails)
+
 
 module.exports = router

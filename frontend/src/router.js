@@ -20,6 +20,7 @@ import FileView from './components/admin/content/file-view.vue' // NEW
 
 
 import AddProject from './components/admin/content/projectmanagement/addProject.vue'
+import ProjectSettings from './components/admin/content/projectmanagement/setting.vue'
 import CreateTask from './components/admin/content/taskmanagement/createTask.vue'
 
 import Staff from './components/staff/staffHome.vue'
@@ -82,7 +83,12 @@ const routes = [
       {
         path: 'file-view',
         component: FileView
-      }
+      },
+      {
+        path: 'project-management/settings/:id',
+        name: 'ProjectSettings',
+        component: ProjectSettings
+},
 
 
     ]

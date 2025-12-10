@@ -235,8 +235,7 @@ function onAssign(p) {
   alert(`Assign clicked for ${p.code}`)
 }
 function onSettings(p) {
-  // TODO: open settings modal/sidebar
-  alert(`Settings clicked for ${p.code}`)
+  router.push(`/admin/project-management/settings/${p.id}`)
 }
 
 onMounted(fetchProjects)
