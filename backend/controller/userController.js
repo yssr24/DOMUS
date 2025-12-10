@@ -259,3 +259,340 @@ exports.markAllNotificationsRead = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to mark all notifications as read.' })
   }
 }
+
+// ...existing code...
+
+// Get project details for client
+exports.getProjectDetails = async (req, res) => {
+  try {
+    const { projectId } = req.params
+    const { clientId } = req.query
+
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'Project ID is required' })
+    }
+
+    const db = admin.firestore()
+
+    // Get project
+    const projectDoc = await db.collection('projects').doc(projectId).get()
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Project not found' })
+    }
+
+    const project = { id: projectDoc.id, ...projectDoc.data() }
+
+    // Verify client has access to this project
+    if (clientId && project.clientId !== clientId) {
+      return res.status(403).json({ success: false, message: 'Access denied' })
+    }
+
+    // Get staff members assigned to this project
+    const staffMembers = []
+    if (project.staffAssigned && project.staffAssigned.length > 0) {
+      for (const staffId of project.staffAssigned) {
+        try {
+          const staffDoc = await db.collection('users').doc(staffId).get()
+          if (staffDoc.exists) {
+            const staffData = staffDoc.data()
+            staffMembers.push({
+              id: staffDoc.id,
+              name: [staffData.firstname, staffData.lastname].filter(Boolean).join(' ') || staffData.email,
+              email: staffData.email,
+              profilePic: staffData.profilePic || null,
+              role: staffData.role
+            })
+          }
+        } catch (e) {
+          console.error('Error fetching staff:', e)
+        }
+      }
+    }
+
+    // Get tasks for this project to calculate progress
+    const tasksSnap = await db.collection('tasks')
+      .where('projectId', '==', projectId)
+      .get()
+
+    const tasks = []
+    let totalTasks = 0
+    let completedTasks = 0
+
+    tasksSnap.forEach(doc => {
+      const task = { id: doc.id, ...doc.data() }
+      tasks.push(task)
+      totalTasks++
+      if (task.status === 'done' || task.status === 'completed') {
+        completedTasks++
+      }
+    })
+
+    // Calculate progress percentage
+    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
+    res.json({
+      success: true,
+      data: {
+        ...project,
+        progress,
+        staffMembers,
+        taskStats: {
+          total: totalTasks,
+          completed: completedTasks,
+          todo: tasks.filter(t => t.status === 'todo').length,
+          inProgress: tasks.filter(t => t.status === 'in-progress').length,
+          review: tasks.filter(t => t.status === 'review').length
+        }
+      }
+    })
+  } catch (err) {
+    console.error('getProjectDetails error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch project details' })
+  }
+}
+
+// Get files for a project
+exports.getProjectFiles = async (req, res) => {
+  try {
+    const { projectId } = req.params
+
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'Project ID is required' })
+    }
+
+    const db = admin.firestore()
+
+    const filesSnap = await db.collection('files')
+      .where('projectId', '==', projectId)
+      .orderBy('createdAt', 'desc')
+      .get()
+
+    const files = []
+    const uploaderIds = new Set()
+
+    filesSnap.forEach(doc => {
+      const data = doc.data()
+      files.push({
+        id: doc.id,
+        ...data,
+        uploadedAt: data.createdAt
+      })
+      if (data.uploadedBy) {
+        uploaderIds.add(data.uploadedBy)
+      }
+    })
+
+    // Get uploader names
+    const uploaderMap = {}
+    for (const uid of uploaderIds) {
+      try {
+        const userDoc = await db.collection('users').doc(uid).get()
+        if (userDoc.exists) {
+          const userData = userDoc.data()
+          uploaderMap[uid] = [userData.firstname, userData.lastname].filter(Boolean).join(' ') || userData.email
+        }
+      } catch (e) {
+        uploaderMap[uid] = 'Unknown'
+      }
+    }
+
+    // Enrich files with uploader names
+    const enrichedFiles = files.map(f => ({
+      ...f,
+      uploaderName: uploaderMap[f.uploadedBy] || 'System'
+    }))
+
+    res.json({ success: true, data: enrichedFiles })
+  } catch (err) {
+    console.error('getProjectFiles error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch project files' })
+  }
+}
+
+// Get client submissions for a project
+exports.getProjectSubmissions = async (req, res) => {
+  try {
+    const { projectId } = req.params
+
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'Project ID is required' })
+    }
+
+    const db = admin.firestore()
+
+    const submissionsSnap = await db.collection('clientSubmissions')
+      .where('projectId', '==', projectId)
+      .orderBy('createdAt', 'desc')
+      .get()
+
+    const submissions = []
+
+    submissionsSnap.forEach(doc => {
+      submissions.push({
+        id: doc.id,
+        ...doc.data()
+      })
+    })
+
+    res.json({ success: true, data: submissions })
+  } catch (err) {
+    console.error('getProjectSubmissions error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch submissions' })
+  }
+}
+
+// Get activity logs for a project
+exports.getProjectActivities = async (req, res) => {
+  try {
+    const { projectId } = req.params
+
+    if (!projectId) {
+      return res.status(400).json({ success: false, message: 'Project ID is required' })
+    }
+
+    const db = admin.firestore()
+    const activities = []
+
+    // Get notifications/activities related to this project
+    const notifsSnap = await db.collection('notifications')
+      .where('projectId', '==', projectId)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get()
+
+    notifsSnap.forEach(doc => {
+      const data = doc.data()
+      activities.push({
+        id: doc.id,
+        type: data.type,
+        message: data.message,
+        createdAt: data.createdAt,
+        userId: data.userId
+      })
+    })
+
+    // Get file uploads as activities
+    const filesSnap = await db.collection('files')
+      .where('projectId', '==', projectId)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get()
+
+    filesSnap.forEach(doc => {
+      const data = doc.data()
+      activities.push({
+        id: `file_${doc.id}`,
+        type: 'file_upload',
+        message: `File "${data.fileName}" was uploaded`,
+        createdAt: data.createdAt,
+        fileName: data.fileName,
+        fileType: data.type
+      })
+    })
+
+    // Get submissions as activities
+    const subsSnap = await db.collection('clientSubmissions')
+      .where('projectId', '==', projectId)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get()
+
+    subsSnap.forEach(doc => {
+      const data = doc.data()
+      activities.push({
+        id: `sub_${doc.id}`,
+        type: 'submission',
+        message: data.message || 'Client submitted files',
+        createdAt: data.createdAt,
+        files: data.files
+      })
+    })
+
+    // Get task activities
+    const tasksSnap = await db.collection('tasks')
+      .where('projectId', '==', projectId)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get()
+
+    tasksSnap.forEach(doc => {
+      const data = doc.data()
+      activities.push({
+        id: `task_${doc.id}`,
+        type: 'task_created',
+        message: `Task "${data.title}" was created`,
+        createdAt: data.createdAt,
+        taskTitle: data.title,
+        taskStatus: data.status
+      })
+    })
+
+    // Sort all activities by date
+    activities.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime()
+      const dateB = new Date(b.createdAt).getTime()
+      return dateB - dateA
+    })
+
+    res.json({ success: true, data: activities.slice(0, 50) })
+  } catch (err) {
+    console.error('getProjectActivities error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch activities' })
+  }
+}
+
+// Submit client submission
+exports.submitClientSubmission = async (req, res) => {
+  try {
+    const { projectId } = req.params
+    const { clientId, message, files } = req.body
+
+    if (!projectId || !clientId) {
+      return res.status(400).json({ success: false, message: 'Project ID and Client ID are required' })
+    }
+
+    const db = admin.firestore()
+
+    // Create submission
+    const submission = {
+      clientId,
+      projectId,
+      message: message || '',
+      files: files || [],
+      createdAt: new Date().toISOString()
+    }
+
+    const docRef = await db.collection('clientSubmissions').add(submission)
+
+    // Create notification for admin/staff
+    const projectDoc = await db.collection('projects').doc(projectId).get()
+    if (projectDoc.exists) {
+      const project = projectDoc.data()
+      
+      // Notify assigned staff
+      if (project.staffAssigned && project.staffAssigned.length > 0) {
+        for (const staffId of project.staffAssigned) {
+          await db.collection('notifications').add({
+            userId: staffId,
+            projectId,
+            type: 'client_submission',
+            message: `Client submitted files for project "${project.code || project.title}"`,
+            read: false,
+            createdAt: new Date().toISOString()
+          })
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Submission successful',
+      data: { id: docRef.id, ...submission }
+    })
+  } catch (err) {
+    console.error('submitClientSubmission error:', err)
+    res.status(500).json({ success: false, message: 'Failed to submit' })
+  }
+}
+
+// ...existing code...
