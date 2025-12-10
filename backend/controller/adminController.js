@@ -717,10 +717,25 @@ exports.streamFile = async (req, res) => {
 // Handle contact form submission
 exports.submitContactMessage = async (req, res) => {
   try {
-    const { name, email, message, senderId } = req.body
+    const { name, email, message, senderId, recaptchaToken } = req.body
 
     if (!name || !email || !message) {
       return res.status(400).json({ success: false, message: 'Name, email, and message are required.' })
+    }
+
+    // Verify reCAPTCHA
+    if (!recaptchaToken) {
+      return res.status(400).json({ success: false, message: 'reCAPTCHA verification is required.' })
+    }
+
+    const recaptchaSecret = process.env.RECAPTCHA_SECRET_KEY
+    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${recaptchaSecret}&response=${recaptchaToken}`
+
+    const recaptchaRes = await fetch(verifyUrl, { method: 'POST' })
+    const recaptchaData = await recaptchaRes.json()
+
+    if (!recaptchaData.success) {
+      return res.status(400).json({ success: false, message: 'reCAPTCHA verification failed. Please try again.' })
     }
 
     // Save to Firestore messages collection
@@ -728,7 +743,7 @@ exports.submitContactMessage = async (req, res) => {
       projectId: null,
       senderId: senderId || null,
       senderName: name,
-      senderEmail: email, // User's email saved in database
+      senderEmail: email,
       receiverId: 'admin',
       text: message,
       files: [],
@@ -756,7 +771,6 @@ exports.submitContactMessage = async (req, res) => {
           .label { font-weight: 600; color: #5a6675; }
           .value { color: #213547; }
           .email-link { color: #1976d2; text-decoration: none; }
-          .email-link:hover { text-decoration: underline; }
           .message-box { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; margin-top: 16px; }
           .footer { text-align: center; color: #888; font-size: 0.9rem; margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; }
           .reply-note { background: #e3f2fd; border-radius: 8px; padding: 12px; margin-top: 16px; text-align: center; }
@@ -785,7 +799,7 @@ exports.submitContactMessage = async (req, res) => {
             <p style="color: #213547; margin: 0; white-space: pre-wrap;">${message}</p>
           </div>
           <div class="reply-note">
-            <p style="margin: 0;">To reply to this message, click: <a href="mailto:${email}?subject=Re: DOMUS Contact Form">${email}</a></p>
+            <p style="margin: 0;">To reply, click: <a href="mailto:${email}?subject=Re: DOMUS Contact Form">${email}</a></p>
           </div>
           <div class="footer">
             This message was sent via the DOMUS website contact form.
@@ -796,7 +810,7 @@ exports.submitContactMessage = async (req, res) => {
     `
 
     await transporter.sendMail({
-      from: `"DOMUS Architecture" <${process.env.EMAIL_FROM}>`, // SendGrid verified sender
+      from: `"DOMUS Architecture" <${process.env.EMAIL_FROM}>`,
       to: 'domus.architecture92@gmail.com',
       subject: `New Contact Form Message from ${name} (${email})`,
       html: emailHtml
