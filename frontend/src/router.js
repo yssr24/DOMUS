@@ -14,11 +14,12 @@ import TaskManagement from './components/admin/content/taskManagement.vue'
 import File_and_Document from './components/admin/content/file_and_document.vue'
 import clientPortal from './components/admin/content/clientPortal.vue'
 import NotificationCenter from './components/admin/content/notificationCenter.vue'
+import SystemSecurity from './components/admin/content/sytemSecurity.vue'
 import Billing_and_finance from './components/admin/content/billing_and_finance.vue'
 import Website from './components/admin/content/Website.vue'
 import FileView from './components/admin/content/file-view.vue' // NEW
 
-
+  
 import AddProject from './components/admin/content/projectmanagement/addProject.vue'
 import ProjectSettings from './components/admin/content/projectmanagement/setting.vue'
 import CreateTask from './components/admin/content/taskmanagement/createTask.vue'
@@ -88,7 +89,11 @@ const routes = [
         path: 'project-management/settings/:id',
         name: 'ProjectSettings',
         component: ProjectSettings
-},
+      },
+      {
+        path: 'system-security',
+        component: SystemSecurity
+      }
 
 
     ]
