@@ -450,22 +450,15 @@ async function handleUpload() {
   }
 }
 
-
 function openView(f) {
-  // Prefer the direct Firebase Storage URL if available
-  const url = f.fileUrl || f.url
-  
-  if (!url) {
-    showAlert('No file URL available', 'error')
-    return
-  }
-  
+  // Use the correct URL property from the file object
+  const url = f.fileUrl || f.url || `${API_BASE_URL}/api/admin/stream-file?path=${encodeURIComponent(f.path)}`
   router.push({
     path: '/admin/file-view',
     query: {
       url: encodeURIComponent(url),
-      name: f.fileName || f.name || 'Unknown File',
-      type: f.type || getFileExtension(f.fileName || f.name || '')
+      name: f.fileName || f.name,
+      type: f.type
     }
   })
 }

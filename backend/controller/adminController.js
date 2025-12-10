@@ -696,58 +696,36 @@ exports.getDesigns = async (req, res) => {
 }
 // ...existing code...
 // List files under "files/"
-// ...existing code...
-
-// List files from Firebase Storage
 exports.getFiles = async (_req, res) => {
   try {
-    const db = admin.firestore()
+    const admin = require('../config/database')
     const bucket = admin.storage().bucket()
-    
-    // Get files from Firestore collection (if you store file metadata there)
-    const filesSnap = await db.collection('files').get()
-    const files = []
-    
-    for (const doc of filesSnap.docs) {
-      const data = doc.data()
-      
-      // If fileUrl doesn't exist, generate a signed URL
-      let fileUrl = data.fileUrl
-      if (!fileUrl && data.path) {
-        try {
-          const file = bucket.file(data.path)
-          const [url] = await file.getSignedUrl({
-            action: 'read',
-            expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
-          })
-          fileUrl = url
-        } catch (e) {
-          console.error('Error generating signed URL:', e)
-        }
-      }
-      
-      files.push({
-        id: doc.id,
-        fileName: data.fileName || data.name,
-        type: data.type || data.contentType,
-        size: data.size,
-        path: data.path,
-        fileUrl: fileUrl,
-        projectId: data.projectId,
-        projectCode: data.projectCode,
-        uploadedAt: data.uploadedAt || data.createdAt,
-        uploadedBy: data.uploadedBy
+    console.log('Storage bucket:', bucket.name) // debug
+
+    const prefix = 'files/'
+    const [gcsFiles] = await bucket.getFiles({ prefix })
+
+    const items = []
+    for (const f of gcsFiles) {
+      if (f.name.endsWith('/')) continue
+      const [meta] = await f.getMetadata()
+      const baseName = f.name.substring(f.name.lastIndexOf('/') + 1)
+      items.push({
+        id: f.name,
+        path: f.name, // e.g., files/my.pdf
+        name: baseName,
+        type: meta.contentType || '',
+        size: Number(meta.size) || 0,
+        uploadedAt: meta.updated || meta.timeCreated || null
       })
     }
-    
-    res.json({ success: true, data: files })
+    items.sort((a,b) => new Date(b.uploadedAt||0) - new Date(a.uploadedAt||0))
+    res.json({ success: true, data: items })
   } catch (err) {
-    console.error('getFiles error:', err)
-    res.status(500).json({ success: false, message: 'Failed to fetch files.' })
+    console.error('getFiles error:', err?.message)
+    res.status(500).json({ success: false, message: 'Failed to list files.' })
   }
 }
-
-// ...existing code...
 
 // Stream a file (fixes CORS/range for pdf.js)
 // ...existing code...
