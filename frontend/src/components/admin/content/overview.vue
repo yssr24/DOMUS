@@ -4,6 +4,14 @@
       <h2>Admin Overview</h2>
 
       <div class="ov-actions">
+        <button class="btn dl print" @click="openPrint">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          Print
+        </button>
         <button class="btn dl pdf" @click="downloadPDF">Download PDF</button>
         <button class="btn dl csv" @click="downloadCSV">Download CSV</button>
       </div>
@@ -97,6 +105,27 @@ import { stats, userChartOptions, userChartSeries, projChartOptions, projChartSe
 
 import VueApexCharts from 'vue3-apexcharts'
 import { onMounted } from 'vue'
+
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+function openPrint() {
+  // Store data in sessionStorage for print page
+  sessionStorage.setItem('printData', JSON.stringify({
+    stats: stats.value,
+    userChartData: {
+      categories: userChartOptions.value?.xaxis?.categories || [],
+      data: userChartSeries.value?.[0]?.data || []
+    },
+    projectData: {
+      labels: projChartOptions.value?.labels || [],
+      data: projChartSeries.value || []
+    },
+    users: users.value || []
+  }))
+  router.push('/admin/print')
+}
 
 onMounted(() => {
   initOverview()
@@ -356,5 +385,17 @@ export default {
     width: 100%;
     justify-content: flex-end;
   }
+}
+
+.btn.dl.print {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-color: #8e24aa33;
+  background: #f9f5ff;
+}
+
+.btn.dl.print:hover {
+  background: #f3e8ff;
 }
 </style>

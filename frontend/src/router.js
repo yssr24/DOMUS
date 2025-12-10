@@ -23,6 +23,8 @@ import FileView from './components/admin/content/file-view.vue' // NEW
 import AddProject from './components/admin/content/projectmanagement/addProject.vue'
 import ProjectSettings from './components/admin/content/projectmanagement/setting.vue'
 import CreateTask from './components/admin/content/taskmanagement/createTask.vue'
+import Print from './components/admin/content/print.vue'
+
 
 import Staff from './components/staff/staffHome.vue'
 import OverviewStaff from './components/staff/content/OverviewStaff.vue'
@@ -93,7 +95,12 @@ const routes = [
       {
         path: 'system-security',
         component: SystemSecurity
-      }
+      },
+      {
+        path: 'print',
+        name: 'Print',
+        component: Print
+},
 
 
     ]

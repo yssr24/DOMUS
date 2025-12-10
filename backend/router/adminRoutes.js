@@ -37,5 +37,10 @@ router.get('/projects-by-status', adminController.getProjectsByStatus)
 router.get('/recent-users', adminController.getRecentUsers)
 router.get('/project-details/:id', adminController.getProjectDetails)
 
+router.get('/project-staff/:projectId', adminController.getProjectStaff)
+router.get('/available-staff', adminController.getAvailableStaff)
+router.post('/assign-staff', adminController.assignStaffToProject)
+router.post('/remove-staff', adminController.removeStaffFromProject)
+
 
 module.exports = router

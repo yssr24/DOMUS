@@ -147,99 +147,149 @@ export function downloadCSV() {
   URL.revokeObjectURL(url)
 }
 
+// ...existing code...
+
+// Update the downloadPDF function to match print.vue style
 export function downloadPDF() {
-  try {
-    const doc = new jsPDF()
-    let y = 20
+  const printData = {
+    stats: stats.value,
+    userChartData: {
+      categories: userChartOptions.value?.xaxis?.categories || [],
+      data: userChartSeries.value?.[0]?.data || []
+    },
+    projectData: {
+      labels: projChartOptions.value?.labels || [],
+      data: projChartSeries.value || []
+    },
+    users: users.value || []
+  }
 
-    // Title
-    doc.setFontSize(18)
-    doc.setTextColor(33, 53, 71)
-    doc.text('DOMUS Overview Report', 14, y)
-    y += 10
+  const currentDate = new Date().toLocaleDateString('en-US', { 
+    year: 'numeric', month: 'long', day: 'numeric' 
+  })
+  
+  const currentDateTime = new Date().toLocaleString('en-US', { 
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  })
 
-    doc.setFontSize(10)
-    doc.setTextColor(100)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, y)
-    y += 15
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>DOMUS Overview Report</title>
+        <style>
+          @page { size: A4 portrait; margin: 15mm; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #213547; line-height: 1.5; padding: 20px; background: #fff; }
+          .page-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 2px solid #e6b23a; margin-bottom: 24px; }
+          .logo-section { display: flex; align-items: center; gap: 12px; }
+          .logo-placeholder { width: 48px; height: 48px; background: linear-gradient(135deg, #e6b23a 0%, #d4a12e 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 14px; }
+          .title-section h1 { font-size: 24px; color: #e6b23a; margin: 0; }
+          .title-section p { font-size: 12px; color: #666; margin: 0; }
+          .report-info { text-align: right; }
+          .report-info h2 { font-size: 18px; color: #213547; margin: 0; }
+          .report-info p { font-size: 12px; color: #666; margin: 0; }
+          .print-section { margin-bottom: 24px; }
+          .print-section h3 { font-size: 16px; color: #213547; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+          .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+          .stat-box { background: #f8f9fa; border-radius: 8px; padding: 16px; text-align: center; border: 1px solid #e0e0e0; }
+          .stat-label { display: block; font-size: 11px; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+          .stat-value { display: block; font-size: 24px; font-weight: 700; color: #1976d2; }
+          .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+          .chart-box { background: #fafafa; border-radius: 8px; padding: 12px; border: 1px solid #eee; }
+          .chart-box h4 { font-size: 13px; color: #213547; margin-bottom: 10px; }
+          .data-table, .users-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          .data-table th, .data-table td, .users-table th, .users-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+          .data-table th, .users-table th { background: #f5f5f5; font-weight: 600; color: #333; }
+          .users-table { font-size: 10px; }
+          .no-data { text-align: center; color: #999; padding: 20px !important; }
+          .page-footer { display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px solid #eee; margin-top: 40px; font-size: 10px; color: #666; }
+          .status-badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 9px; font-weight: 600; text-transform: uppercase; }
+          .status-active, .status-online { background: #e8f5e9; color: #2e7d32; }
+          .status-inactive, .status-offline { background: #f5f5f5; color: #757575; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <header class="page-header">
+          <div class="logo-section">
+            <div class="logo-placeholder">D</div>
+            <div class="title-section">
+              <h1>DOMUS</h1>
+              <p>Architecture Management System</p>
+            </div>
+          </div>
+          <div class="report-info">
+            <h2>Overview Report</h2>
+            <p>Generated: ${currentDate}</p>
+          </div>
+        </header>
 
-    // Stats Summary
-    doc.setFontSize(12)
-    doc.setTextColor(33, 53, 71)
-    doc.text('Summary Statistics', 14, y)
-    y += 8
+        <section class="print-section">
+          <h3>Statistics Summary</h3>
+          <div class="stats-grid">
+            <div class="stat-box"><span class="stat-label">Total Users</span><span class="stat-value">${printData.stats?.totalUsers || 0}</span></div>
+            <div class="stat-box"><span class="stat-label">Active Users</span><span class="stat-value">${printData.stats?.activeUsers || 0}</span></div>
+            <div class="stat-box"><span class="stat-label">Total Projects</span><span class="stat-value">${printData.stats?.totalProjects || 0}</span></div>
+            <div class="stat-box"><span class="stat-label">Total Clients</span><span class="stat-value">${printData.stats?.totalClients || 0}</span></div>
+          </div>
+        </section>
 
-    doc.setFontSize(10)
-    doc.text(`Total Users: ${stats.value.totalUsers}`, 14, y)
-    y += 6
-    doc.text(`Active Users: ${stats.value.activeUsers}`, 14, y)
-    y += 6
-    doc.text(`Total Projects: ${stats.value.totalProjects}`, 14, y)
-    y += 6
-    doc.text(`Total Clients: ${stats.value.totalClients}`, 14, y)
-    y += 15
+        <section class="print-section">
+          <h3>Data Analysis</h3>
+          <div class="charts-grid">
+            <div class="chart-box">
+              <h4>User Registrations (Last 7 Days)</h4>
+              <table class="data-table">
+                <thead><tr><th>Day</th><th>Registrations</th></tr></thead>
+                <tbody>${(printData.userChartData?.data || []).map((val, idx) => `<tr><td>${printData.userChartData?.categories?.[idx] || ''}</td><td>${val}</td></tr>`).join('')}</tbody>
+              </table>
+            </div>
+            <div class="chart-box">
+              <h4>Projects by Status</h4>
+              <table class="data-table">
+                <thead><tr><th>Status</th><th>Count</th></tr></thead>
+                <tbody>${(printData.projectData?.data || []).map((val, idx) => `<tr><td>${printData.projectData?.labels?.[idx] || ''}</td><td>${val}</td></tr>`).join('')}</tbody>
+              </table>
+            </div>
+          </div>
+        </section>
 
-    // User Registrations Table
-    doc.setFontSize(12)
-    doc.text('User Registrations (This Week)', 14, y)
-    y += 5
+        <section class="print-section">
+          <h3>Recent Users</h3>
+          <table class="users-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th></tr></thead>
+            <tbody>
+              ${(printData.users || []).length > 0 
+                ? (printData.users || []).map(user => `<tr><td>${user.name || ''}</td><td>${user.email || ''}</td><td>${user.role || ''}</td><td><span class="status-badge status-${(user.status || '').toLowerCase()}">${user.status || ''}</span></td><td>${user.joined || ''}</td></tr>`).join('')
+                : '<tr><td colspan="5" class="no-data">No users to display</td></tr>'}
+            </tbody>
+          </table>
+        </section>
 
-    const regData = getUserRegistrationRows()
-    autoTable(doc, {
-      startY: y,
-      head: [regData.head],
-      body: regData.rows,
-      theme: 'striped',
-      headStyles: { fillColor: [25, 118, 210] },
-      margin: { left: 14 }
-    })
-    y = doc.lastAutoTable.finalY + 15
+        <footer class="page-footer">
+          <div>DOMUS Architecture © ${new Date().getFullYear()}</div>
+          <div>Page 1 of 1</div>
+          <div>Printed: ${currentDateTime}</div>
+        </footer>
+      </body>
+    </html>
+  `
 
-    // Projects by Status Table
-    doc.setFontSize(12)
-    doc.text('Projects by Status', 14, y)
-    y += 5
-
-    const projData = getProjectRows()
-    autoTable(doc, {
-      startY: y,
-      head: [projData.head],
-      body: projData.rows,
-      theme: 'striped',
-      headStyles: { fillColor: [230, 178, 58] },
-      margin: { left: 14 }
-    })
-    y = doc.lastAutoTable.finalY + 15
-
-    // Recent Users Table
-    if (y > 220) {
-      doc.addPage()
-      y = 20
-    }
-    doc.setFontSize(12)
-    doc.text('Recent Users', 14, y)
-    y += 5
-
-    const userData = getUserRows()
-    autoTable(doc, {
-      startY: y,
-      head: [userData.head],
-      body: userData.rows,
-      theme: 'striped',
-      headStyles: { fillColor: [67, 160, 71] },
-      margin: { left: 14 },
-      columnStyles: {
-        0: { cellWidth: 35 },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 30 }
-      }
-    })
-
-    doc.save(`overview-${new Date().toISOString().slice(0, 10)}.pdf`)
-  } catch (e) {
-    console.error('PDF generation failed:', e)
-    alert('Failed to generate PDF: ' + e.message)
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    alert('Please allow popups to download PDF')
+    return
+  }
+  printWindow.document.write(htmlContent)
+  printWindow.document.close()
+  
+  printWindow.onload = function() {
+    setTimeout(() => {
+      printWindow.print()
+    }, 250)
   }
 }
+
+// ...existing code...

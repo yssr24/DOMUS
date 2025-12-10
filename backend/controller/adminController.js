@@ -1180,3 +1180,270 @@ exports.getProjectDetails = async (req, res) => {
 }
 
 // ...existing code...
+
+// Get staff assigned to a project
+exports.getProjectStaff = async (req, res) => {
+  try {
+    const { projectId } = req.params
+    const db = admin.firestore()
+
+    const projectDoc = await db.collection('projects').doc(projectId).get()
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Project not found' })
+    }
+
+    const project = projectDoc.data()
+    const staffIds = project.staffAssigned || []
+
+    const staffMembers = []
+    for (const staffId of staffIds) {
+      const staffDoc = await db.collection('users').doc(staffId).get()
+      if (staffDoc.exists) {
+        const s = staffDoc.data()
+        staffMembers.push({
+          id: staffDoc.id,
+          name: `${s.firstname || ''} ${s.lastname || ''}`.trim() || s.name || 'Unknown',
+          email: s.email,
+          profilePic: s.profilePic || null,
+          role: s.role
+        })
+      }
+    }
+
+    res.json({ success: true, data: staffMembers })
+  } catch (err) {
+    console.error('getProjectStaff error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch project staff.' })
+  }
+}
+
+// Get all available staff members
+exports.getAvailableStaff = async (req, res) => {
+  try {
+    const { excludeProjectId } = req.query
+    const db = admin.firestore()
+
+    const staffSnap = await db.collection('users').where('role', '==', 'staff').get()
+    
+    let excludedStaffIds = []
+    if (excludeProjectId) {
+      const projectDoc = await db.collection('projects').doc(excludeProjectId).get()
+      if (projectDoc.exists) {
+        excludedStaffIds = projectDoc.data().staffAssigned || []
+      }
+    }
+
+    const staffList = []
+    staffSnap.forEach(doc => {
+      if (!excludedStaffIds.includes(doc.id)) {
+        const s = doc.data()
+        staffList.push({
+          id: doc.id,
+          name: `${s.firstname || ''} ${s.lastname || ''}`.trim() || s.name || 'Unknown',
+          email: s.email,
+          profilePic: s.profilePic || null
+        })
+      }
+    })
+
+    res.json({ success: true, data: staffList })
+  } catch (err) {
+    console.error('getAvailableStaff error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch available staff.' })
+  }
+}
+
+// Send staff assignment email
+async function sendStaffAssignedEmail({ to, staffName, projectCode, projectTitle, projectLink }) {
+  const emailHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+        .container { max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); padding: 32px; }
+        .logo { display: flex; align-items: center; justify-content: center; margin-bottom: 24px; }
+        .logo img { width: 48px; height: 48px; margin-right: 12px; }
+        .logo-text { font-size: 1.8rem; font-weight: 700; color: #e6b23a; letter-spacing: 2px; }
+        h2 { text-align: center; color: #213547; margin-bottom: 24px; }
+        .info { background: #f9f6f2; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+        .info-row { margin-bottom: 10px; }
+        .label { font-weight: 600; color: #5a6675; }
+        .value { color: #213547; }
+        .btn { display: inline-block; background: #1976d2; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-top: 16px; }
+        .btn:hover { background: #1565c0; }
+        .footer { text-align: center; color: #888; font-size: 0.9rem; margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="logo">
+          <img src="https://firebasestorage.googleapis.com/v0/b/dts-capstone.firebasestorage.app/o/img%2Fdomus.png?alt=media&token=c374d8fd-0bb7-4747-99d6-2f1938bc68cc" alt="DOMUS">
+          <span class="logo-text">DOMUS</span>
+        </div>
+        <h2>You've Been Assigned to a Project!</h2>
+        <p style="text-align: center; color: #213547;">Hello <strong>${staffName}</strong>,</p>
+        <p style="text-align: center; color: #5a6675;">You have been assigned to work on a new project.</p>
+        <div class="info">
+          <div class="info-row">
+            <span class="label">Project Code:</span>
+            <span class="value">${projectCode}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Project Title:</span>
+            <span class="value">${projectTitle}</span>
+          </div>
+        </div>
+        <div style="text-align: center;">
+          <a href="${projectLink}" class="btn">View Project</a>
+        </div>
+        <div class="footer">
+          This is an automated message from DOMUS Architecture.
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  return transporter.sendMail({
+    from: `"DOMUS Architecture" <${process.env.EMAIL_FROM}>`,
+    to,
+    subject: `You've been assigned to project ${projectCode} - DOMUS`,
+    html: emailHtml
+  })
+}
+
+// Assign staff to project
+exports.assignStaffToProject = async (req, res) => {
+  try {
+    const { projectId, staffId } = req.body
+    const db = admin.firestore()
+
+    if (!projectId || !staffId) {
+      return res.status(400).json({ success: false, message: 'projectId and staffId are required.' })
+    }
+
+    // Get project
+    const projectRef = db.collection('projects').doc(projectId)
+    const projectDoc = await projectRef.get()
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Project not found.' })
+    }
+    const project = projectDoc.data()
+
+    // Check if staff already assigned
+    const currentStaff = project.staffAssigned || []
+    if (currentStaff.includes(staffId)) {
+      return res.status(400).json({ success: false, message: 'Staff is already assigned to this project.' })
+    }
+
+    // Update project with new staff
+    await projectRef.update({
+      staffAssigned: admin.firestore.FieldValue.arrayUnion(staffId),
+      updatedAt: new Date().toISOString()
+    })
+
+    // Update staff's assignedProjects
+    const staffRef = db.collection('users').doc(staffId)
+    const staffDoc = await staffRef.get()
+    if (staffDoc.exists) {
+      await staffRef.update({
+        assignedProjects: admin.firestore.FieldValue.arrayUnion(projectId)
+      })
+    }
+
+    // Get staff info for email and notification
+    const staffData = staffDoc.exists ? staffDoc.data() : null
+    const staffName = staffData ? `${staffData.firstname || ''} ${staffData.lastname || ''}`.trim() : 'Staff'
+    const staffEmail = staffData?.email
+
+    // Create notification
+    const notificationMessage = `You have been assigned to project ${project.code || projectId}: ${project.title || 'Untitled'}`
+    await db.collection('notifications').add({
+      userId: staffId,
+      projectId: projectId,
+      type: 'staff_assigned',
+      message: notificationMessage,
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+
+    // Send email notification
+    if (staffEmail) {
+      const projectLink = `${FRONTEND_BASE_URL}/staff/projects`
+      try {
+        await sendStaffAssignedEmail({
+          to: staffEmail,
+          staffName: staffName || 'Team Member',
+          projectCode: project.code || projectId,
+          projectTitle: project.title || 'Untitled',
+          projectLink
+        })
+      } catch (e) {
+        console.error('Staff assignment email failed:', e.message)
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Staff assigned successfully.',
+      staff: {
+        id: staffId,
+        name: staffName,
+        email: staffEmail,
+        profilePic: staffData?.profilePic || null
+      }
+    })
+  } catch (err) {
+    console.error('assignStaffToProject error:', err)
+    res.status(500).json({ success: false, message: 'Failed to assign staff.' })
+  }
+}
+
+// Remove staff from project
+exports.removeStaffFromProject = async (req, res) => {
+  try {
+    const { projectId, staffId } = req.body
+    const db = admin.firestore()
+
+    if (!projectId || !staffId) {
+      return res.status(400).json({ success: false, message: 'projectId and staffId are required.' })
+    }
+
+    // Update project - remove staff
+    const projectRef = db.collection('projects').doc(projectId)
+    const projectDoc = await projectRef.get()
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Project not found.' })
+    }
+    const project = projectDoc.data()
+
+    await projectRef.update({
+      staffAssigned: admin.firestore.FieldValue.arrayRemove(staffId),
+      updatedAt: new Date().toISOString()
+    })
+
+    // Update staff's assignedProjects
+    const staffRef = db.collection('users').doc(staffId)
+    await staffRef.update({
+      assignedProjects: admin.firestore.FieldValue.arrayRemove(projectId)
+    })
+
+    // Create notification for removal
+    await db.collection('notifications').add({
+      userId: staffId,
+      projectId: projectId,
+      type: 'staff_removed',
+      message: `You have been removed from project ${project.code || projectId}: ${project.title || 'Untitled'}`,
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    })
+
+    res.json({ success: true, message: 'Staff removed successfully.' })
+  } catch (err) {
+    console.error('removeStaffFromProject error:', err)
+    res.status(500).json({ success: false, message: 'Failed to remove staff.' })
+  }
+}
+
+// ...existing code...

@@ -58,18 +58,19 @@
               <th @click="toggleSort('ownerName')" :class="sortClass('ownerName')">Owner</th>
               <th @click="toggleSort('status')" :class="sortClass('status')">Status</th>
               <th @click="toggleSort('progress')" :class="sortClass('progress')">Progress</th>
-
+              <th class="actions-col">Assign</th>
+              <th class="actions-col">Settings</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="6" class="center muted">Loading...</td>
+              <td colspan="7" class="center muted">Loading...</td>
             </tr>
             <tr v-else-if="error">
-              <td colspan="6" class="center error">{{ error }}</td>
+              <td colspan="7" class="center error">{{ error }}</td>
             </tr>
             <tr v-else-if="!sortedRows.length">
-              <td colspan="6" class="center muted">No projects found.</td>
+              <td colspan="7" class="center muted">No projects found.</td>
             </tr>
             <tr v-for="p in sortedRows" :key="p.id">
               <td class="mono">{{ p.code }}</td>
@@ -87,7 +88,7 @@
                 </div>
               </td>
               <td class="actions-col">
-                <button class="icon-btn" title="Assign" @click="onAssign(p)">
+                <button class="icon-btn" title="Assign Staff" @click="onAssign(p)">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="#1976d2" aria-hidden="true">
                     <path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.4c-3.3 0-9.8 1.7-9.8 5v1.9h19.6v-1.9c0-3.3-6.5-5-9.8-5z"/>
                   </svg>
@@ -112,6 +113,110 @@
       </svg>
       <span>Add Project</span>
     </button>
+
+    <!-- Assign Staff Modal -->
+    <div v-if="showAssignModal" class="modal-overlay" @click.self="closeAssignModal">
+      <div class="assign-modal">
+        <div class="modal-header">
+          <h3>Assign Staff</h3>
+          <button class="close-btn" @click="closeAssignModal">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="#666" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="modal-project-info">
+          <span class="project-code">{{ selectedProject?.code }}</span>
+          <span class="project-title">{{ selectedProject?.title }}</span>
+        </div>
+
+        <div class="modal-body">
+          <!-- Current Assigned Staff -->
+          <div class="staff-section">
+            <h4>Assigned Staff ({{ assignedStaff.length }})</h4>
+            <div v-if="loadingStaff" class="loading-spinner">Loading...</div>
+            <div v-else-if="assignedStaff.length === 0" class="empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="#ccc">
+                <path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.4c-3.3 0-9.8 1.7-9.8 5v1.9h19.6v-1.9c0-3.3-6.5-5-9.8-5z"/>
+              </svg>
+              <p>No staff assigned yet</p>
+            </div>
+            <div v-else class="staff-list">
+              <div v-for="staff in assignedStaff" :key="staff.id" class="staff-card">
+                <div class="staff-avatar">
+                  <img v-if="staff.profilePic" :src="staff.profilePic" :alt="staff.name" />
+                  <div v-else class="avatar-placeholder">{{ getInitials(staff.name) }}</div>
+                </div>
+                <div class="staff-info">
+                  <span class="staff-name">{{ staff.name }}</span>
+                  <span class="staff-email">{{ staff.email }}</span>
+                </div>
+                <button 
+                  class="remove-btn" 
+                  @click="removeStaff(staff)"
+                  :disabled="removingStaffId === staff.id"
+                  title="Remove staff"
+                >
+                  <svg v-if="removingStaffId !== staff.id" width="18" height="18" viewBox="0 0 24 24" fill="#e53935">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+                  </svg>
+                  <span v-else class="spinner-small"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add Staff Section -->
+          <div class="staff-section add-section">
+            <h4>Add Staff</h4>
+            <div class="search-staff">
+              <input 
+                v-model="staffSearch" 
+                type="text" 
+                placeholder="Search staff by name or email..."
+                class="staff-search-input"
+              />
+            </div>
+            <div v-if="loadingAvailable" class="loading-spinner">Loading available staff...</div>
+            <div v-else-if="filteredAvailableStaff.length === 0" class="empty-state small">
+              <p>{{ staffSearch ? 'No matching staff found' : 'No available staff to assign' }}</p>
+            </div>
+            <div v-else class="staff-list available-list">
+              <div 
+                v-for="staff in filteredAvailableStaff" 
+                :key="staff.id" 
+                class="staff-card selectable"
+                @click="assignStaff(staff)"
+              >
+                <div class="staff-avatar">
+                  <img v-if="staff.profilePic" :src="staff.profilePic" :alt="staff.name" />
+                  <div v-else class="avatar-placeholder">{{ getInitials(staff.name) }}</div>
+                </div>
+                <div class="staff-info">
+                  <span class="staff-name">{{ staff.name }}</span>
+                  <span class="staff-email">{{ staff.email }}</span>
+                </div>
+                <button 
+                  class="add-btn"
+                  :disabled="addingStaffId === staff.id"
+                >
+                  <svg v-if="addingStaffId !== staff.id" width="18" height="18" viewBox="0 0 24 24" fill="#43a047">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                  </svg>
+                  <span v-else class="spinner-small green"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toast notification -->
+        <div v-if="toastMessage" :class="['toast', toastType]">
+          {{ toastMessage }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -120,11 +225,10 @@ import { useRouter } from 'vue-router'
 import { ref, onMounted, computed } from 'vue'
 import { API_BASE_URL } from '../../../config'
 
-
 const router = useRouter()
-const totalProjects = ref()
-const pendingProjects = ref()
-const completedProjects = ref()
+const totalProjects = ref(0)
+const pendingProjects = ref(0)
+const completedProjects = ref(0)
 
 const rows = ref([])
 const loading = ref(false)
@@ -133,7 +237,18 @@ const search = ref('')
 const sortKey = ref('code')
 const sortDir = ref('asc')
 
-
+// Modal state
+const showAssignModal = ref(false)
+const selectedProject = ref(null)
+const assignedStaff = ref([])
+const availableStaff = ref([])
+const loadingStaff = ref(false)
+const loadingAvailable = ref(false)
+const staffSearch = ref('')
+const addingStaffId = ref(null)
+const removingStaffId = ref(null)
+const toastMessage = ref('')
+const toastType = ref('success')
 
 function onAddProject() {
   router.push('/admin/project-management/add-project')
@@ -147,6 +262,7 @@ function toggleSort(key) {
     sortDir.value = 'asc'
   }
 }
+
 function sortClass(key) {
   return {
     sortable: true,
@@ -158,6 +274,7 @@ function sortClass(key) {
 function prettyStatus(s) {
   return (s || 'pending').replace(/\b\w/g, c => c.toUpperCase())
 }
+
 function statusClass(s) {
   const v = (s || 'pending').toLowerCase()
   return {
@@ -188,7 +305,6 @@ const sortedRows = computed(() => {
   arr.sort((a, b) => {
     const va = a[key]
     const vb = b[key]
-    // numeric sort when both are numbers (e.g., progress)
     if (typeof va === 'number' && typeof vb === 'number' && !Number.isNaN(va) && !Number.isNaN(vb)) {
       return (va - vb) * dir
     }
@@ -199,6 +315,15 @@ const sortedRows = computed(() => {
     return 0
   })
   return arr
+})
+
+const filteredAvailableStaff = computed(() => {
+  const q = staffSearch.value.trim().toLowerCase()
+  if (!q) return availableStaff.value
+  return availableStaff.value.filter(s =>
+    s.name.toLowerCase().includes(q) ||
+    s.email.toLowerCase().includes(q)
+  )
 })
 
 async function fetchProjects() {
@@ -216,10 +341,8 @@ async function fetchProjects() {
       status: p.status,
       ownerEmail: p.ownerEmail,
       ownerId: p.ownerId,
-      // NEW: progress (fallback to 0 if API doesn’t provide it)
       progress: Number(p.progress ?? 0)
     }))
-    // update quick stats
     totalProjects.value = rows.value.length
     pendingProjects.value = rows.value.filter(r => (r.status || '').toLowerCase() === 'pending').length
     completedProjects.value = rows.value.filter(r => (r.status || '').toLowerCase() === 'completed').length
@@ -230,10 +353,129 @@ async function fetchProjects() {
   }
 }
 
-function onAssign(p) {
-  // TODO: open assign modal/sidebar
-  alert(`Assign clicked for ${p.code}`)
+function getInitials(name) {
+  if (!name) return '?'
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
+
+function showToast(message, type = 'success') {
+  toastMessage.value = message
+  toastType.value = type
+  setTimeout(() => {
+    toastMessage.value = ''
+  }, 3000)
+}
+
+async function onAssign(p) {
+  selectedProject.value = p
+  showAssignModal.value = true
+  staffSearch.value = ''
+  await Promise.all([fetchProjectStaff(p.id), fetchAvailableStaff(p.id)])
+}
+
+function closeAssignModal() {
+  showAssignModal.value = false
+  selectedProject.value = null
+  assignedStaff.value = []
+  availableStaff.value = []
+  staffSearch.value = ''
+}
+
+async function fetchProjectStaff(projectId) {
+  loadingStaff.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/project-staff/${projectId}`)
+    const json = await res.json()
+    if (json.success) {
+      assignedStaff.value = json.data || []
+    }
+  } catch (e) {
+    console.error('Failed to fetch project staff:', e)
+  } finally {
+    loadingStaff.value = false
+  }
+}
+
+async function fetchAvailableStaff(projectId) {
+  loadingAvailable.value = true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/available-staff?excludeProjectId=${projectId}`)
+    const json = await res.json()
+    if (json.success) {
+      availableStaff.value = json.data || []
+    }
+  } catch (e) {
+    console.error('Failed to fetch available staff:', e)
+  } finally {
+    loadingAvailable.value = false
+  }
+}
+
+async function assignStaff(staff) {
+  if (addingStaffId.value) return
+  addingStaffId.value = staff.id
+  
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/assign-staff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: selectedProject.value.id,
+        staffId: staff.id
+      })
+    })
+    const json = await res.json()
+    
+    if (json.success) {
+      // Move staff from available to assigned
+      availableStaff.value = availableStaff.value.filter(s => s.id !== staff.id)
+      assignedStaff.value.push(json.staff || staff)
+      showToast(`${staff.name} has been assigned and notified via email!`, 'success')
+    } else {
+      showToast(json.message || 'Failed to assign staff', 'error')
+    }
+  } catch (e) {
+    showToast('Network error. Please try again.', 'error')
+  } finally {
+    addingStaffId.value = null
+  }
+}
+
+async function removeStaff(staff) {
+  if (removingStaffId.value) return
+  
+  if (!confirm(`Are you sure you want to remove ${staff.name} from this project?`)) {
+    return
+  }
+  
+  removingStaffId.value = staff.id
+  
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/remove-staff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: selectedProject.value.id,
+        staffId: staff.id
+      })
+    })
+    const json = await res.json()
+    
+    if (json.success) {
+      // Move staff from assigned to available
+      assignedStaff.value = assignedStaff.value.filter(s => s.id !== staff.id)
+      availableStaff.value.push(staff)
+      showToast(`${staff.name} has been removed from the project`, 'success')
+    } else {
+      showToast(json.message || 'Failed to remove staff', 'error')
+    }
+  } catch (e) {
+    showToast('Network error. Please try again.', 'error')
+  } finally {
+    removingStaffId.value = null
+  }
+}
+
 function onSettings(p) {
   router.push(`/admin/project-management/settings/${p.id}`)
 }
@@ -242,6 +484,7 @@ onMounted(fetchProjects)
 </script>
 
 <style scoped>
+/* ...existing code... */
 .project-management-dashboard {
   width: 100%;
   padding: 24px 0;
@@ -287,15 +530,9 @@ onMounted(fetchProjects)
   width: 56px;
   height: 56px;
 }
-.card-project .card-icon {
-  background: #1976d2;
-}
-.card-pending .card-icon {
-  background: #fbc02d;
-}
-.card-completed .card-icon {
-  background: #43a047;
-}
+.card-project .card-icon { background: #1976d2; }
+.card-pending .card-icon { background: #fbc02d; }
+.card-completed .card-icon { background: #43a047; }
 .card-info {
   display: flex;
   flex-direction: column;
@@ -311,26 +548,6 @@ onMounted(fetchProjects)
   font-size: 2rem;
   font-weight: 700;
   color: #213547;
-}
-.project-management-content {
-  width: 100%;
-  max-width: 900px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px #e6b23a22;
-  padding: 32px 24px;
-  margin-top: 18px;
-}
-.project-management-content h2 {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #1976d2;
-  margin-bottom: 12px;
-}
-.project-management-content p {
-  font-size: 1.08rem;
-  color: #213547;
-  margin-bottom: 18px;
 }
 
 .add-project-btn {
@@ -356,68 +573,6 @@ onMounted(fetchProjects)
   background: #1565c0;
   box-shadow: 0 8px 32px #1976d266;
   transform: scale(1.05);
-}
-.add-project-btn svg {
-  display: block;
-}
-@media (max-width: 900px) {
-  .cards-container {
-    gap: 16px;
-    max-width: 100%;
-  }
-  .stat-card {
-    padding: 18px 16px;
-    min-width: 160px;
-    max-width: 100%;
-    height: 110px;
-    flex: 1 1 160px;
-  }
-  .project-management-content {
-    padding: 18px 8px;
-  }
-    .add-project-btn {
-    right: 18px;
-    bottom: 18px;
-    padding: 12px 18px 12px 14px;
-    font-size: 1rem;
-  }
-    .datatable-search { flex: 1; }
-
-}
-@media (max-width: 600px) {
-  .cards-container {
-    flex-direction: column;
-    gap: 12px;
-    align-items: center;
-  }
-  .stat-card {
-    width: 90vw;
-    min-width: 0;
-    padding: 14px 10px;
-    margin: 0;
-    height: 110px;
-    flex: 1 1 100%;
-  }
-  .project-management-content {
-    width: 95vw;
-    min-width: 0;
-    padding: 10px 4px;
-    margin: 0;
-  }
-  .project-management-content h2 {
-    font-size: 1.08rem;
-  }
-  .project-management-content p {
-    font-size: 1rem;
-  }
-    .add-project-btn {
-    right: 8px;
-    bottom: 8px;
-    padding: 10px 14px 10px 10px;
-    font-size: 0.95rem;
-  }
-    .datatable-card { padding: 10px; border-radius: 12px; }
-  .projects-table thead th, .projects-table tbody td { padding: 10px 8px; }
 }
 
 /* Datatable */
@@ -477,7 +632,7 @@ onMounted(fetchProjects)
 }
 .projects-table tbody tr:hover { background: #fafafa; }
 
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 
 .icon-btn {
   background: none;
@@ -522,30 +677,23 @@ onMounted(fetchProjects)
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.status-pill.pending      { color:#b36b00; background:#fff7e1; border-color:#ffe6a6; }
-.status-pill.design       { color:#0b5da3; background:#e9f3ff; border-color:#cfe6ff; }
-.status-pill.review       { color:#6a0596; background:#f6eaff; border-color:#ead6ff; }
+.status-pill.pending { color:#b36b00; background:#fff7e1; border-color:#ffe6a6; }
+.status-pill.design { color:#0b5da3; background:#e9f3ff; border-color:#cfe6ff; }
+.status-pill.review { color:#6a0596; background:#f6eaff; border-color:#ead6ff; }
 .status-pill.construction { color:#0b7a3b; background:#e8ffee; border-color:#caf5d9; }
-.status-pill.completed    { color:#1f7a1f; background:#ecfaec; border-color:#cfeccc; }
-.status-pill.archived     { color:#888; background:#f3f3f3; border-color:#ddd; }
+.status-pill.completed { color:#1f7a1f; background:#ecfaec; border-color:#cfeccc; }
+.status-pill.archived { color:#888; background:#f3f3f3; border-color:#ddd; }
 
 .center { text-align: center; }
 .muted { color: #777; }
 .error { color: #c62828; }
-.projects-table thead th:nth-child(5) {
-  min-width: 140px;
-}
 
-.progress-cell {
-  min-width: 160px;
-}
-
+.progress-cell { min-width: 160px; }
 .progress {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
 .progress-track {
   position: relative;
   flex: 1 1 auto;
@@ -555,7 +703,6 @@ onMounted(fetchProjects)
   overflow: hidden;
   box-shadow: inset 0 1px 2px rgba(0,0,0,.06);
 }
-
 .progress-fill {
   position: absolute;
   left: 0;
@@ -566,12 +713,318 @@ onMounted(fetchProjects)
   border-radius: 999px;
   transition: width .25s ease;
 }
-
 .progress-text {
   font-weight: 700;
   font-size: .86rem;
   color: #213547;
   min-width: 36px;
   text-align: right;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.assign-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #213547;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.close-btn:hover { background: #f5f5f5; }
+
+.modal-project-info {
+  padding: 12px 24px;
+  background: #f9f9f9;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+}
+
+.project-code {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: #1976d2;
+  background: #e3f2fd;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.project-title {
+  color: #213547;
+  font-weight: 500;
+}
+
+.modal-body {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.staff-section {
+  margin-bottom: 24px;
+}
+
+.staff-section h4 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  color: #5a6675;
+  font-weight: 600;
+}
+
+.add-section {
+  border-top: 1px solid #eee;
+  padding-top: 20px;
+  margin-top: 8px;
+}
+
+.loading-spinner {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: #999;
+}
+.empty-state.small {
+  padding: 16px;
+}
+.empty-state svg {
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+.empty-state p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.staff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.available-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.staff-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #f9f9f9;
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+
+.staff-card.selectable {
+  cursor: pointer;
+}
+.staff-card.selectable:hover {
+  background: #e3f2fd;
+}
+
+.staff-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.staff-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1976d2, #1565c0);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.staff-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.staff-name {
+  font-weight: 600;
+  color: #213547;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.staff-email {
+  color: #888;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.remove-btn, .add-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.remove-btn:hover { background: #ffebee; }
+.add-btn:hover { background: #e8f5e9; }
+.remove-btn:disabled, .add-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.search-staff {
+  margin-bottom: 12px;
+}
+
+.staff-search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.staff-search-input:focus {
+  border-color: #1976d2;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #e53935;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.spinner-small.green {
+  border-top-color: #43a047;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Toast */
+.toast {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  animation: slideUp 0.3s ease;
+  z-index: 100;
+}
+.toast.success {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+.toast.error {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .cards-container { gap: 16px; max-width: 100%; }
+  .stat-card { padding: 18px 16px; min-width: 160px; }
+  .add-project-btn { right: 18px; bottom: 18px; padding: 12px 18px 12px 14px; font-size: 1rem; }
+  .datatable-search { flex: 1; }
+}
+
+@media (max-width: 600px) {
+  .cards-container { flex-direction: column; gap: 12px; align-items: center; }
+  .stat-card { width: 90vw; min-width: 0; padding: 14px 10px; }
+  .add-project-btn { right: 8px; bottom: 8px; padding: 10px 14px 10px 10px; font-size: 0.95rem; }
+  .datatable-card { padding: 10px; border-radius: 12px; }
+  .assign-modal { max-width: 100%; margin: 10px; }
+  .modal-header { padding: 16px 18px; }
+  .modal-body { padding: 12px 18px 18px; }
 }
 </style>
