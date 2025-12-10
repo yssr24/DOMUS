@@ -1447,6 +1447,9 @@ exports.removeStaffFromProject = async (req, res) => {
   }
 }
 
+// ...existing code...
+
+// Get notifications for admin
 exports.getAdminNotifications = async (req, res) => {
   try {
     const { adminId, limit = 20 } = req.query
@@ -1456,6 +1459,7 @@ exports.getAdminNotifications = async (req, res) => {
 
     const db = admin.firestore()
 
+    // Get notifications where userId matches adminId
     const notifsSnap = await db.collection('notifications')
       .where('userId', '==', adminId)
       .get()

@@ -46,4 +46,6 @@ router.get('/notifications', adminController.getAdminNotifications)
 router.post('/mark-notification-read', adminController.markNotificationRead)
 router.post('/mark-all-notifications-read', adminController.markAllNotificationsRead)
 
+
+
 module.exports = router

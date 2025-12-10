@@ -173,6 +173,8 @@ exports.changePassword = async (req, res) => {
   res.json({ success: true, message: 'Password updated successfully.' })
 }
 
+// ...existing code...
+
 // Get notifications for client
 exports.getClientNotifications = async (req, res) => {
   try {
