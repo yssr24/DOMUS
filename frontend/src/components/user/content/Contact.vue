@@ -166,7 +166,7 @@ async function submitForm() {
           </span>
           <div class="info">
             <h3>Phone</h3>
-            <p>+63 912 345 6789</p>
+            <p>+63 907 904 8433</p>
           </div>
         </div>
 
@@ -361,7 +361,6 @@ input:focus, textarea:focus { border-color: #e6b23a; }
 
 .sent { color: #2e7d32; margin-top: 8px; font-weight: 600; }
 
-/* Responsive */
 @media (max-width: 920px) {
   .grid { grid-template-columns: 1fr; }
 }
