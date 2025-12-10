@@ -306,6 +306,9 @@ async function sendProjectCreatedEmail({ to, clientName, projectLink }) {
   })
 }
 
+
+// ...existing code...
+
 // Create project + notification + email
 exports.addProject = async (req, res) => {
   try {
@@ -343,14 +346,20 @@ exports.addProject = async (req, res) => {
       code
     })
 
-    // Fetch selected user's email/name using clientId
-    const userDoc = await db.collection('users').doc(clientId).get()
+    // Fetch selected user's email/name and role using clientId
+    const userDocRef = db.collection('users').doc(clientId)
+    const userDoc = await userDocRef.get()
     let clientEmail = ''
     let clientName = ''
     if (userDoc.exists) {
       const u = userDoc.data()
       clientEmail = u.email
       clientName = [u.firstname, u.lastname].filter(Boolean).join(' ')
+      
+      // If user role is 'user', update it to 'client'
+      if (u.role === 'user') {
+        await userDocRef.update({ role: 'client' })
+      }
     }
 
     // Create notification document
@@ -389,6 +398,8 @@ exports.addProject = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to add project.' })
   }
 }
+
+// ...existing code...
 
 exports.getProjectsForClient = async (req, res) => {
   try {

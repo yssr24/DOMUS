@@ -33,7 +33,7 @@
           </svg>
         </div>
         <div class="card-info">
-          <div class="card-title">Completed Projects</div>
+          <div class="card-title">Projects Done</div>
           <div class="card-number">{{ completedProjects }}</div>
         </div>
       </div>

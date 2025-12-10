@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { API_BASE_URL } from '../../config'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 
 export const stats = ref({
   totalUsers: 0,
@@ -147,7 +147,7 @@ export function downloadCSV() {
   URL.revokeObjectURL(url)
 }
 
-export async function downloadPDF() {
+export function downloadPDF() {
   try {
     const doc = new jsPDF()
     let y = 20
@@ -185,7 +185,7 @@ export async function downloadPDF() {
     y += 5
 
     const regData = getUserRegistrationRows()
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [regData.head],
       body: regData.rows,
@@ -201,7 +201,7 @@ export async function downloadPDF() {
     y += 5
 
     const projData = getProjectRows()
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [projData.head],
       body: projData.rows,
@@ -221,7 +221,7 @@ export async function downloadPDF() {
     y += 5
 
     const userData = getUserRows()
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [userData.head],
       body: userData.rows,
@@ -240,6 +240,6 @@ export async function downloadPDF() {
     doc.save(`overview-${new Date().toISOString().slice(0, 10)}.pdf`)
   } catch (e) {
     console.error('PDF generation failed:', e)
-    alert('Failed to generate PDF. Please try again.')
+    alert('Failed to generate PDF: ' + e.message)
   }
 }
