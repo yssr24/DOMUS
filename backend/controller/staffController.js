@@ -402,4 +402,160 @@ exports.getNotifications = async (req, res) => {
   }
 }
 
-// ...existing code (getStaffOverview, getStaffProjects, etc.)...
+// ...existing code...
+
+// Get project detail with tasks and submissions
+exports.getProjectDetail = async (req, res) => {
+  try {
+    const { projectId, staffId } = req.query
+    if (!projectId || !staffId) {
+      return res.status(400).json({ success: false, message: 'projectId and staffId are required' })
+    }
+
+    const db = admin.firestore()
+
+    // Get project
+    const projectDoc = await db.collection('projects').doc(projectId).get()
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Project not found' })
+    }
+
+    const projectData = projectDoc.data()
+    
+    // Get client name
+    let clientName = '—'
+    if (projectData.clientId) {
+      const clientDoc = await db.collection('users').doc(projectData.clientId).get()
+      if (clientDoc.exists) {
+        const c = clientDoc.data()
+        clientName = `${c.lastname || ''}, ${c.firstname || ''}`.trim() || c.email
+      }
+    }
+
+    const project = {
+      id: projectDoc.id,
+      ...projectData,
+      clientName,
+      dueDate: projectData.dueDate?.toDate?.() || projectData.dueDate,
+      createdAt: projectData.createdAt?.toDate?.() || projectData.createdAt
+    }
+
+    // Get tasks for this project assigned to staff
+    const tasksSnap = await db.collection('tasks')
+      .where('projectId', '==', projectId)
+      .where('assignedTo', 'array-contains', staffId)
+      .get()
+
+    const tasks = []
+    tasksSnap.forEach(doc => {
+      const d = doc.data()
+      tasks.push({
+        id: doc.id,
+        ...d,
+        deadline: d.deadline?.toDate?.() || d.deadline,
+        createdAt: d.createdAt?.toDate?.() || d.createdAt
+      })
+    })
+
+    // Get staff's submissions for this project
+    const subsSnap = await db.collection('staffSubmissions')
+      .where('projectId', '==', projectId)
+      .where('staffId', '==', staffId)
+      .orderBy('createdAt', 'desc')
+      .get()
+
+    const submissions = []
+    const taskIds = new Set(tasks.map(t => t.id))
+    const taskMap = Object.fromEntries(tasks.map(t => [t.id, t.title]))
+
+    subsSnap.forEach(doc => {
+      const d = doc.data()
+      submissions.push({
+        id: doc.id,
+        ...d,
+        taskTitle: taskMap[d.taskId] || null,
+        createdAt: d.createdAt?.toDate?.() || d.createdAt
+      })
+    })
+
+    res.json({ success: true, data: { project, tasks, submissions } })
+  } catch (err) {
+    console.error('getProjectDetail error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch project detail.' })
+  }
+}
+
+// Submit files for a task
+exports.submitFiles = async (req, res) => {
+  try {
+    const { staffId, projectId, taskId, message } = req.body
+    const files = req.files
+
+    if (!staffId || !projectId) {
+      return res.status(400).json({ success: false, message: 'staffId and projectId are required' })
+    }
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one file is required' })
+    }
+
+    const db = admin.firestore()
+    const bucket = admin.storage().bucket()
+
+    const uploadedFiles = []
+    for (const file of files) {
+      const fileName = `submissions/${projectId}/${staffId}/${Date.now()}_${file.originalname}`
+      const fileRef = bucket.file(fileName)
+      
+      await fileRef.save(file.buffer, {
+        metadata: { contentType: file.mimetype }
+      })
+
+      await fileRef.makePublic()
+      const fileUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`
+
+      uploadedFiles.push({
+        fileName: file.originalname,
+        fileUrl,
+        type: file.mimetype
+      })
+
+      // Also save to files collection
+      await db.collection('files').add({
+        projectId,
+        taskId: taskId || null,
+        uploadedBy: staffId,
+        fileName: file.originalname,
+        fileUrl,
+        type: file.mimetype.split('/')[1] || 'unknown',
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      })
+    }
+
+    // Create submission record
+    const submissionData = {
+      staffId,
+      projectId,
+      taskId: taskId || null,
+      message: message || '',
+      files: uploadedFiles,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    }
+
+    const subRef = await db.collection('staffSubmissions').add(submissionData)
+
+    res.json({
+      success: true,
+      data: {
+        id: subRef.id,
+        ...submissionData,
+        createdAt: new Date()
+      }
+    })
+  } catch (err) {
+    console.error('submitFiles error:', err)
+    res.status(500).json({ success: false, message: 'Failed to submit files.' })
+  }
+}
+
+// ...existing code...

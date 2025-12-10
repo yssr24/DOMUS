@@ -139,6 +139,9 @@
 import { ref, computed, onMounted } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import { API_BASE_URL } from '../../../config'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // State
 const loading = ref(true)
@@ -344,15 +347,15 @@ function isOverdue(p) {
 }
 
 function openProject(p) { 
-  alert(`Open project ${p.code} — ${p.title}`) 
+  router.push({ name: 'ProjectStaffContent', params: { projectId: p.id } })
 }
 
 function viewTasks(p) { 
-  alert(`View tasks for ${p.code}`) 
+  router.push({ name: 'ProjectStaffContent', params: { projectId: p.id } })
 }
 
 function viewFiles(p) { 
-  alert(`View files for ${p.code}`) 
+  router.push({ name: 'ProjectStaffContent', params: { projectId: p.id } })
 }
 
 onMounted(fetchProjects)

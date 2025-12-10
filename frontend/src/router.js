@@ -30,6 +30,8 @@ import Staff from './components/staff/staffHome.vue'
 import OverviewStaff from './components/staff/content/OverviewStaff.vue'
 import ProjectsStaff from './components/staff/content/ProjectsStaff.vue'
 import TaskStaff from './components/staff/content/TaskStaff.vue'
+import ProjectStaffContent from './components/staff/content/projectstaffcontent.vue'
+
 
 const routes = [
   { path: '/', component: Homepage }, // <-- Add homepage route
@@ -110,6 +112,7 @@ const routes = [
     children: [
       { path : '', component: OverviewStaff },
       { path: 'projects', component: ProjectsStaff },
+      { path: 'projects/:projectId', name: 'ProjectStaffContent', component: ProjectStaffContent },
       { path: 'tasks', component: TaskStaff }
     ]
    },
