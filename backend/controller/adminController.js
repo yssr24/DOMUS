@@ -1534,3 +1534,195 @@ exports.markAllNotificationsRead = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to mark all notifications as read.' })
   }
 }
+
+// ...existing code...
+
+// Upload file and notify client
+exports.uploadFile = async (req, res) => {
+  try {
+    const { fileName, projectId, description, uploadedBy, uploaderEmail } = req.body
+    const file = req.file
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' })
+    }
+
+    if (!fileName || !projectId) {
+      return res.status(400).json({ success: false, message: 'File name and project are required' })
+    }
+
+    const db = admin.firestore()
+    const bucket = admin.storage().bucket()
+
+    // Get project details
+    const projectDoc = await db.collection('projects').doc(projectId).get()
+    if (!projectDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Project not found' })
+    }
+    const project = projectDoc.data()
+
+    // Get client details
+    let clientEmail = null
+    let clientName = null
+    if (project.clientId) {
+      const clientDoc = await db.collection('users').doc(project.clientId).get()
+      if (clientDoc.exists) {
+        const clientData = clientDoc.data()
+        clientEmail = clientData.email
+        clientName = [clientData.firstname, clientData.lastname].filter(Boolean).join(' ') || clientData.email
+      }
+    }
+
+    // Upload file to Firebase Storage
+    const ext = file.originalname.split('.').pop().toLowerCase()
+    const storagePath = `files/${projectId}/${Date.now()}_${fileName}.${ext}`
+    const fileRef = bucket.file(storagePath)
+
+    await fileRef.save(file.buffer, {
+      metadata: {
+        contentType: file.mimetype,
+        metadata: {
+          originalName: file.originalname,
+          uploadedBy: uploadedBy || 'admin'
+        }
+      }
+    })
+
+    // Make file publicly accessible
+    await fileRef.makePublic()
+    const fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`
+
+    // Determine file type
+    const typeMap = {
+      jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', bmp: 'image',
+      pdf: 'pdf',
+      doc: 'doc', docx: 'doc',
+      xls: 'sheet', xlsx: 'sheet', csv: 'sheet',
+      dwg: 'cad', dxf: 'cad',
+      ppt: 'ppt', pptx: 'ppt'
+    }
+    const fileType = typeMap[ext] || ext
+
+    // Save to files collection
+    const fileData = {
+      projectId,
+      uploadedBy: uploadedBy || null,
+      fileName: `${fileName}.${ext}`,
+      fileUrl,
+      type: fileType,
+      size: file.size,
+      description: description || '',
+      createdAt: new Date().toISOString()
+    }
+
+    const fileDocRef = await db.collection('files').add(fileData)
+
+    // Create notification for client
+    if (project.clientId) {
+      await db.collection('notifications').add({
+        userId: project.clientId,
+        projectId,
+        type: 'file_upload',
+        message: `A new file "${fileName}.${ext}" has been uploaded to your project "${project.title || project.code}"`,
+        read: false,
+        createdAt: new Date().toISOString()
+      })
+    }
+
+    // Send email notification to client
+    if (clientEmail) {
+      try {
+        const projectLink = `${FRONTEND_BASE_URL}/projects/${projectId}`
+        
+        const emailHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>New File Uploaded - DOMUS</title>
+  <style>
+    body { background: #f5f5f5; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+    .container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.12); padding: 32px 28px; }
+    .logo { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+    .logo img { width: 48px; height: 48px; margin-right: 12px; }
+    .logo-text { font-size: 1.8rem; font-weight: 700; color: #e6b23a; letter-spacing: 2px; }
+    h2 { text-align: center; color: #213547; margin: 0 0 16px 0; }
+    .file-box { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px; margin: 20px 0; }
+    .file-name { font-weight: 700; color: #213547; font-size: 1.1rem; margin: 0 0 8px 0; }
+    .file-meta { color: #666; font-size: 0.95rem; margin: 4px 0; }
+    .btn { display: block; width: 100%; background: #e6b23a; color: #fff; font-weight: 600; font-size: 1.1rem; border: none; border-radius: 8px; padding: 14px 0; margin: 24px 0 12px 0; text-align: center; text-decoration: none; box-shadow: 0 4px 14px rgba(230, 178, 58, 0.3); }
+    .note { font-size: 0.95rem; color: #888; text-align: center; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <img src="https://firebasestorage.googleapis.com/v0/b/dts-capstone.firebasestorage.app/o/img%2Fdomus.png?alt=media&token=c374d8fd-0bb7-4747-99d6-2f1938bc68cc" alt="DOMUS">
+      <span class="logo-text">DOMUS</span>
+    </div>
+    <h2>New File Uploaded</h2>
+    <p style="text-align:center; color:#555;">Hello ${clientName || 'there'},</p>
+    <p style="text-align:center; color:#555;">A new file has been uploaded to your project:</p>
+    
+    <div class="file-box">
+      <p class="file-name">📄 ${fileName}.${ext}</p>
+      <p class="file-meta"><strong>Project:</strong> ${project.code || ''} - ${project.title || 'Your Project'}</p>
+      ${description ? `<p class="file-meta"><strong>Description:</strong> ${description}</p>` : ''}
+      <p class="file-meta"><strong>Size:</strong> ${(file.size / 1024).toFixed(1)} KB</p>
+    </div>
+    
+    <a href="${projectLink}" class="btn">View Project</a>
+    
+    <p class="note">
+      If you have any questions, please contact our team.<br>
+      Thank you for choosing DOMUS Architecture!
+    </p>
+  </div>
+</body>
+</html>
+        `
+
+        await transporter.sendMail({
+          from: `"DOMUS" <${process.env.EMAIL_FROM}>`,
+          to: clientEmail,
+          subject: `New File Uploaded - ${project.code || 'Your Project'}`,
+          html: emailHtml
+        })
+
+        console.log(`Email notification sent to ${clientEmail}`)
+      } catch (emailErr) {
+        console.error('Failed to send email notification:', emailErr)
+        // Don't fail the upload if email fails
+      }
+    }
+
+    // Also notify assigned staff
+    if (project.staffAssigned && project.staffAssigned.length > 0) {
+      for (const staffId of project.staffAssigned) {
+        await db.collection('notifications').add({
+          userId: staffId,
+          projectId,
+          type: 'file_upload',
+          message: `A new file "${fileName}.${ext}" has been uploaded to project "${project.code || project.title}"`,
+          read: false,
+          createdAt: new Date().toISOString()
+        })
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      data: {
+        id: fileDocRef.id,
+        ...fileData
+      }
+    })
+
+  } catch (err) {
+    console.error('uploadFile error:', err)
+    res.status(500).json({ success: false, message: err.message || 'Failed to upload file' })
+  }
+}
+
+// ...existing code...
