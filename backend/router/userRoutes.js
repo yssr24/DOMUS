@@ -9,4 +9,9 @@ router.post('/resend-code', userController.resendCode)
 router.post('/forgot-password', userController.forgotPassword)
 router.post('/change-password', userController.changePassword)
 
+// Client notification routes
+router.get('/notifications', userController.getClientNotifications)
+router.post('/mark-notification-read', userController.markNotificationRead)
+router.post('/mark-all-notifications-read', userController.markAllNotificationsRead)
+
 module.exports = router
