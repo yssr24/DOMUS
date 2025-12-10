@@ -144,17 +144,6 @@
                 </td>
                 <td class="actions">
                   <button class="link-btn" @click="viewTask(t)">View</button>
-                  <select 
-                    class="status-select"
-                    :value="t.status"
-                    @change="updateStatus(t, $event.target.value)"
-                    :disabled="updatingTaskId === t.id"
-                  >
-                    <option value="todo">To Do</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="review">Review</option>
-                    <option value="done">Done</option>
-                  </select>
                 </td>
               </tr>
             </tbody>

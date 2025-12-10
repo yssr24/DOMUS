@@ -311,7 +311,7 @@ exports.addProject = async (req, res) => {
   try {
     const {
       title, description, location, clientId, staffId,
-      leadArchitect, createdAt, status
+      leadArchitect, createdAt, status, dueDate
     } = req.body
 
     const db = admin.firestore()
@@ -341,6 +341,7 @@ exports.addProject = async (req, res) => {
       leadArchitect: leadArchitect || '',
       createdAt: createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      dueDate: dueDate || null,
       status: status || 'pending',
       code
     })

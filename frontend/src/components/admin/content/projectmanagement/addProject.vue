@@ -79,6 +79,10 @@
             <option v-for="s in staff" :key="s.id" :value="s.id">{{ s.lastname }}, {{ s.firstname }}</option>
           </select>
         </div>
+        <div class="input-group">
+          <label>Due Date (optional)</label>
+          <input v-model="dueDate" type="date" :min="minDate" />
+        </div>
         <div class="step-btn-row">
           <button class="prev-btn" @click="prevStep">Back</button>
           <button class="save-btn" :disabled="!selectedUser || loading" @click="showConfirm = true">
@@ -133,6 +137,13 @@ const clients = ref([])
 const staff = ref([])
 const selectedUser = ref('')
 const selectedStaff = ref('')
+const dueDate = ref('')
+
+// Minimum date is today
+const minDate = computed(() => {
+  const today = new Date()
+  return today.toISOString().split('T')[0]
+})
 
 // Get admin id from localStorage
 const adminId = ref('')
@@ -219,6 +230,7 @@ async function saveProject() {
     staffId: selectedStaff.value || null,
     leadArchitect: adminId.value,
     createdAt: new Date().toISOString(),
+    dueDate: dueDate.value || null,
     status: 'pending'
   }
   // Save project
@@ -239,14 +251,15 @@ async function saveProject() {
 </script>
 
 <style scoped>
+/* ...existing code... */
 .add-project-container {
-  max-width: 900px;           /* wider than before */
+  max-width: 900px;
   min-width: 340px;
   margin: 40px auto;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 2px 12px #e6b23a22;
-  padding: 40px 48px 32px 48px; /* more horizontal padding */
+  padding: 40px 48px 32px 48px;
   position: relative;
   transition: max-width 0.2s, padding 0.2s;
 }
@@ -328,6 +341,9 @@ async function saveProject() {
 .input-group select:focus,
 .input-group textarea:focus {
   border-color: #e6b23a;
+}
+.input-group input[type="date"] {
+  cursor: pointer;
 }
 .step-btn-row {
   display: flex;
