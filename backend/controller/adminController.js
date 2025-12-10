@@ -307,7 +307,6 @@ async function sendProjectCreatedEmail({ to, clientName, projectLink }) {
 }
 
 
-// Create project + notification + email
 exports.addProject = async (req, res) => {
   try {
     const {
@@ -335,44 +334,87 @@ exports.addProject = async (req, res) => {
     const projectDocRef = await db.collection('projects').add({
       title,
       description: description || '',
-      location: location || null, // { province, city, barangay, zip }
-      clientId,                   // user doc id from users collection
+      location: location || null,
+      clientId,
       staffId: staffId || null,
+      staffAssigned: staffId ? [staffId] : [],
       leadArchitect: leadArchitect || '',
       createdAt: createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       status: status || 'pending',
       code
     })
 
-    // Fetch selected user's email/name and role using clientId
+    // Fetch selected user's data using clientId
     const userDocRef = db.collection('users').doc(clientId)
     const userDoc = await userDocRef.get()
     let clientEmail = ''
     let clientName = ''
+    
     if (userDoc.exists) {
       const u = userDoc.data()
       clientEmail = u.email
-      clientName = [u.firstname, u.lastname].filter(Boolean).join(' ')
+      const firstname = u.firstname || ''
+      const lastname = u.lastname || ''
+      clientName = [firstname, lastname].filter(Boolean).join(' ')
       
       // If user role is 'user', update it to 'client'
       if (u.role === 'user') {
-        await userDocRef.update({ role: 'client' })
+        // Update role in users collection
+        await userDocRef.update({ 
+          role: 'client',
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id)
+        })
+        
+        // Also create/update entry in clients collection using same document ID
+        await db.collection('clients').doc(clientId).set({
+          userId: clientId,
+          name: clientName || `${firstname} ${lastname}`.trim(),
+          firstname: firstname,
+          lastname: lastname,
+          email: clientEmail,
+          profilePic: u.profilePic || null,
+          gender: u.gender || null,
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id),
+          createdAt: u.createdAt || new Date().toISOString(),
+          convertedAt: new Date().toISOString()
+        }, { merge: true })
+      } else if (u.role === 'client') {
+        // User is already a client, just add the project to their assignedProjects
+        await userDocRef.update({
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id)
+        })
+        
+        // Update clients collection as well
+        await db.collection('clients').doc(clientId).update({
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id)
+        }).catch(async () => {
+          // If client doc doesn't exist, create it
+          await db.collection('clients').doc(clientId).set({
+            userId: clientId,
+            name: clientName || `${firstname} ${lastname}`.trim(),
+            firstname: firstname,
+            lastname: lastname,
+            email: clientEmail,
+            profilePic: u.profilePic || null,
+            gender: u.gender || null,
+            assignedProjects: [projectDocRef.id],
+            createdAt: u.createdAt || new Date().toISOString(),
+            convertedAt: new Date().toISOString()
+          })
+        })
       }
     }
 
     // Create notification document
-    // Collection: notifications
-    // Fields: userId, type, message, read, createdAt, projectId, projectCode, title
     const message = `A new project (${code}) has been created for you.`
     await db.collection('notifications').add({
       userId: clientId,
+      projectId: projectDocRef.id,
       type: 'created_project',
       message,
       read: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      projectId: projectDocRef.id,
-      projectCode: code,
-      title
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     })
 
     // Send email if email is available
@@ -385,7 +427,6 @@ exports.addProject = async (req, res) => {
           projectLink
         })
       } catch (e) {
-        // Do not fail the whole request if email fails
         console.error('Email send failed:', e.message)
       }
     }
@@ -995,188 +1036,6 @@ exports.getRecentUsers = async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ success: false, message: 'Failed to fetch recent users.' })
-  }
-}
-
-// ...existing code...
-
-// Get project details with all related data
-exports.getProjectDetails = async (req, res) => {
-  try {
-    const { id } = req.params
-    const db = admin.firestore()
-
-    // Get project
-    const projectDoc = await db.collection('projects').doc(id).get()
-    if (!projectDoc.exists) {
-      return res.status(404).json({ success: false, message: 'Project not found' })
-    }
-    const project = { id: projectDoc.id, ...projectDoc.data() }
-
-    // Get client info
-    let client = {}
-    if (project.clientId) {
-      const clientDoc = await db.collection('users').doc(project.clientId).get()
-      if (clientDoc.exists) {
-        const c = clientDoc.data()
-        client = {
-          id: clientDoc.id,
-          name: `${c.firstname || ''} ${c.lastname || ''}`.trim() || c.name || 'Unknown',
-          email: c.email,
-          profilePic: c.profilePic || null
-        }
-      }
-    }
-
-    // Get staff members
-    let staffMembers = []
-    const staffIds = project.staffAssigned || (project.staffId ? [project.staffId] : [])
-    if (staffIds.length > 0) {
-      for (const staffId of staffIds) {
-        const staffDoc = await db.collection('users').doc(staffId).get()
-        if (staffDoc.exists) {
-          const s = staffDoc.data()
-          staffMembers.push({
-            id: staffDoc.id,
-            name: `${s.firstname || ''} ${s.lastname || ''}`.trim() || s.name || 'Unknown',
-            email: s.email,
-            profilePic: s.profilePic || null
-          })
-        }
-      }
-    }
-
-    // Get files for this project
-    const filesSnap = await db.collection('files').where('projectId', '==', id).get()
-    const files = []
-    for (const doc of filesSnap.docs) {
-      const f = doc.data()
-      let uploaderName = 'Unknown'
-      if (f.uploadedBy) {
-        const uploaderDoc = await db.collection('users').doc(f.uploadedBy).get()
-        if (uploaderDoc.exists) {
-          const u = uploaderDoc.data()
-          uploaderName = `${u.firstname || ''} ${u.lastname || ''}`.trim() || u.name || 'Unknown'
-        }
-      }
-      files.push({
-        id: doc.id,
-        ...f,
-        uploaderName,
-        createdAt: f.createdAt?.toDate?.() || f.createdAt
-      })
-    }
-
-    // Get client submissions
-    const submissionsSnap = await db.collection('clientSubmissions').where('projectId', '==', id).get()
-    const submissions = submissionsSnap.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt
-    }))
-
-    // Get tasks
-    const tasksSnap = await db.collection('tasks').where('projectId', '==', id).get()
-    const tasks = []
-    for (const doc of tasksSnap.docs) {
-      const t = doc.data()
-      let assigneeName = 'Unassigned'
-      if (t.assignedTo) {
-        const assigneeDoc = await db.collection('users').doc(t.assignedTo).get()
-        if (assigneeDoc.exists) {
-          const a = assigneeDoc.data()
-          assigneeName = `${a.firstname || ''} ${a.lastname || ''}`.trim() || a.name || 'Unknown'
-        }
-      }
-      tasks.push({
-        id: doc.id,
-        ...t,
-        assigneeName,
-        createdAt: t.createdAt?.toDate?.() || t.createdAt,
-        deadline: t.deadline?.toDate?.() || t.deadline
-      })
-    }
-
-    // Get activity logs (notifications, messages related to this project)
-    const activities = []
-
-    // Notifications for this project
-    const notifSnap = await db.collection('notifications').where('projectId', '==', id).get()
-    notifSnap.docs.forEach(doc => {
-      const n = doc.data()
-      activities.push({
-        id: doc.id,
-        type: n.type || 'notification',
-        message: n.message,
-        createdAt: n.createdAt?.toDate?.() || n.createdAt
-      })
-    })
-
-    // Messages for this project
-    const messagesSnap = await db.collection('messages').where('projectId', '==', id).get()
-    for (const doc of messagesSnap.docs) {
-      const m = doc.data()
-      let senderName = 'Unknown'
-      if (m.senderId) {
-        const senderDoc = await db.collection('users').doc(m.senderId).get()
-        if (senderDoc.exists) {
-          const s = senderDoc.data()
-          senderName = `${s.firstname || ''} ${s.lastname || ''}`.trim() || s.name || 'Unknown'
-        }
-      }
-      activities.push({
-        id: doc.id,
-        type: 'message',
-        message: `${senderName}: ${m.text?.substring(0, 50)}${m.text?.length > 50 ? '...' : ''}`,
-        createdAt: m.createdAt?.toDate?.() || m.createdAt
-      })
-    }
-
-    // Add file uploads as activities
-    files.forEach(f => {
-      activities.push({
-        id: `file-${f.id}`,
-        type: 'file_upload',
-        message: `${f.uploaderName} uploaded ${f.fileName}`,
-        createdAt: f.createdAt
-      })
-    })
-
-    // Add submissions as activities
-    submissions.forEach(s => {
-      activities.push({
-        id: `sub-${s.id}`,
-        type: 'submission',
-        message: `Client submitted: ${s.message?.substring(0, 50) || 'New submission'}`,
-        createdAt: s.createdAt
-      })
-    })
-
-    // Add task creations as activities
-    tasks.forEach(t => {
-      activities.push({
-        id: `task-${t.id}`,
-        type: 'task_created',
-        message: `Task created: ${t.title}`,
-        createdAt: t.createdAt
-      })
-    })
-
-    res.json({
-      success: true,
-      data: {
-        project,
-        client,
-        staffMembers,
-        files,
-        submissions,
-        tasks,
-        activities
-      }
-    })
-  } catch (err) {
-    console.error('getProjectDetails error:', err)
-    res.status(500).json({ success: false, message: 'Failed to fetch project details.' })
   }
 }
 

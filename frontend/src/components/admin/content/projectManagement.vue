@@ -133,10 +133,6 @@ const search = ref('')
 const sortKey = ref('code')
 const sortDir = ref('asc')
 
-function onSettings(p) {
-  router.push(`/admin/project-management/settings/${p.id}`)
-}
-
 
 function onAddProject() {
   router.push('/admin/project-management/add-project')
@@ -236,6 +232,10 @@ async function fetchProjects() {
 function onAssign(p) {
   // TODO: open assign modal/sidebar
   alert(`Assign clicked for ${p.code}`)
+}
+function onSettings(p) {
+  // TODO: open settings modal/sidebar
+  alert(`Settings clicked for ${p.code}`)
 }
 
 onMounted(fetchProjects)

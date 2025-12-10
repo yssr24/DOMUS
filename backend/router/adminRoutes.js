@@ -21,7 +21,6 @@ router.get('/projects-for-client', adminController.getProjectsForClient);
 router.get('/projects', adminController.getAllProjects)
 router.post('/tasks', adminController.createTask)
 router.get('/tasks', adminController.getTasks)
-router.get('/project-details/:id', adminController.getProjectDetails)
 
 router.post('/designs', upload.array('images', 10), adminController.addDesign)
 router.get('/designs', adminController.getDesigns)
