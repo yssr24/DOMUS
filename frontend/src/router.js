@@ -5,8 +5,6 @@ import Verification from './components/verification.vue'
 import ChangePassword from './components/changepassword.vue'
 import ForgotPassword from './components/forgotpassword.vue'
 import Homepage from './components/user/homepage.vue'
-import ProjectDetails from './components/user/client/ProjectDetails.vue'
-
 
 import admin from './components/admin/adminHome.vue'
 import Overview from './components/admin/content/overview.vue'
@@ -38,7 +36,6 @@ const routes = [
   { path: '/about', component: Homepage, meta: { show: 'about' } },
   { path: '/contact', component: Homepage, meta: { show: 'contact' } },
   { path: '/projects', component: Homepage, meta: { show: 'projects' } },
-  { path: '/project/:id', component: ProjectDetails, meta: { requiresAuth: true, role: 'client' } },
   { path: '/login', component: Login },
   { path: '/signup', component: SignUp },
   { path: '/verification', component: Verification },
