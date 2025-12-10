@@ -809,3 +809,186 @@ exports.submitContactMessage = async (req, res) => {
   }
 }
 // ...existing code...
+
+// ...existing code...
+
+// Overview stats
+exports.getOverviewStats = async (req, res) => {
+  try {
+    const usersRef = admin.firestore().collection('users')
+    const projectsRef = admin.firestore().collection('projects')
+    const userStatusRef = admin.firestore().collection('userStatus')
+
+    // Get all users
+    const usersSnap = await usersRef.get()
+    let totalUsers = 0
+    let totalClients = 0
+    let totalStaff = 0
+
+    usersSnap.forEach(doc => {
+      const data = doc.data()
+      if (data.role === 'user') totalUsers++
+      else if (data.role === 'client') totalClients++
+      else if (data.role === 'staff') totalStaff++
+    })
+
+    // Get active users (online in userStatus)
+    const statusSnap = await userStatusRef.where('state', '==', 'online').get()
+    const activeUsers = statusSnap.size
+
+    // Get total projects
+    const projectsSnap = await projectsRef.get()
+    const totalProjects = projectsSnap.size
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers: totalUsers + totalClients + totalStaff,
+        activeUsers,
+        totalProjects,
+        totalClients
+      }
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to fetch overview stats.' })
+  }
+}
+
+// User registration chart data
+exports.getUserRegistrationStats = async (req, res) => {
+  try {
+    const { range } = req.query // week, month, year
+    const usersRef = admin.firestore().collection('users')
+    const snapshot = await usersRef.get()
+    const now = new Date()
+    const stats = {}
+
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      if (data.createdAt) {
+        const created = new Date(data.createdAt)
+        let key
+        if (range === 'week') {
+          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+          const diffDays = Math.floor((now - created) / (1000 * 60 * 60 * 24))
+          if (diffDays < 7) {
+            key = dayNames[created.getDay()]
+          }
+        } else if (range === 'month') {
+          const diffDays = Math.floor((now - created) / (1000 * 60 * 60 * 24))
+          if (diffDays < 30) {
+            key = `Week ${Math.ceil((30 - diffDays) / 7)}`
+          }
+        } else if (range === 'year') {
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+          if (created.getFullYear() === now.getFullYear()) {
+            key = monthNames[created.getMonth()]
+          }
+        }
+        if (key) {
+          stats[key] = (stats[key] || 0) + 1
+        }
+      }
+    })
+
+    let chartData = []
+    if (range === 'week') {
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      const today = now.getDay()
+      const orderedDays = []
+      for (let i = 6; i >= 0; i--) {
+        orderedDays.push(dayNames[(today - i + 7) % 7])
+      }
+      chartData = orderedDays.map(day => ({ x: day, y: stats[day] || 0 }))
+    } else if (range === 'month') {
+      chartData = ['Week 1', 'Week 2', 'Week 3', 'Week 4'].map(w => ({ x: w, y: stats[w] || 0 }))
+    } else if (range === 'year') {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      chartData = monthNames.map(m => ({ x: m, y: stats[m] || 0 }))
+    }
+
+    res.json({ success: true, data: chartData })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to fetch registration stats.' })
+  }
+}
+
+// Projects by status
+exports.getProjectsByStatus = async (req, res) => {
+  try {
+    const projectsRef = admin.firestore().collection('projects')
+    const snapshot = await projectsRef.get()
+
+    const statusCounts = {
+      pending: 0,
+      design: 0,
+      review: 0,
+      construction: 0,
+      completed: 0
+    }
+
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      const status = (data.status || 'pending').toLowerCase().replace('-', '')
+      if (status === 'inprogress' || status === 'in-progress') {
+        statusCounts.design++
+      } else if (statusCounts.hasOwnProperty(status)) {
+        statusCounts[status]++
+      } else {
+        statusCounts.pending++
+      }
+    })
+
+    res.json({
+      success: true,
+      data: {
+        labels: ['Pending', 'Design', 'Review', 'Construction', 'Completed'],
+        series: [
+          statusCounts.pending,
+          statusCounts.design,
+          statusCounts.review,
+          statusCounts.construction,
+          statusCounts.completed
+        ]
+      }
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to fetch project stats.' })
+  }
+}
+
+// Recent users for table
+exports.getRecentUsers = async (req, res) => {
+  try {
+    const usersRef = admin.firestore().collection('users')
+    const userStatusRef = admin.firestore().collection('userStatus')
+
+    const usersSnap = await usersRef.orderBy('createdAt', 'desc').limit(20).get()
+    const users = []
+
+    for (const doc of usersSnap.docs) {
+      const data = doc.data()
+      const statusDoc = await userStatusRef.doc(doc.id).get()
+      const statusData = statusDoc.exists ? statusDoc.data() : {}
+
+      users.push({
+        id: doc.id,
+        name: `${data.firstname || ''} ${data.lastname || ''}`.trim() || data.name || 'N/A',
+        email: data.email || 'N/A',
+        role: data.role || 'user',
+        status: statusData.state || statusData.status || 'offline',
+        joined: data.createdAt ? new Date(data.createdAt).toISOString().slice(0, 10) : 'N/A'
+      })
+    }
+
+    res.json({ success: true, data: users })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to fetch recent users.' })
+  }
+}
+
+// ...existing code...

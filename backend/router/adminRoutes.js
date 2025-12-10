@@ -1,12 +1,13 @@
 const express = require('express')
 const router = express.Router()
 const adminController = require('../controller/adminController')
-const multer = require('multer') // added
+const multer = require('multer')
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 10 } // 10MB each, up to 10 files
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 }
 })
 
+// ...existing code...
 router.get('/user-role-counts', adminController.getUserRoleCounts)
 router.get('/user-stats', adminController.getUserStats)
 router.get('/client-stats', adminController.getClientStats)
@@ -27,6 +28,12 @@ router.get('/designs', adminController.getDesigns)
 router.get('/files', adminController.getFiles)
 router.get('/file', adminController.streamFile)
 
-router.post('/contact', adminController.submitContactMessage) // NEW
+router.post('/contact', adminController.submitContactMessage)
+
+// Overview routes
+router.get('/overview-stats', adminController.getOverviewStats)
+router.get('/user-registration-stats', adminController.getUserRegistrationStats)
+router.get('/projects-by-status', adminController.getProjectsByStatus)
+router.get('/recent-users', adminController.getRecentUsers)
 
 module.exports = router
