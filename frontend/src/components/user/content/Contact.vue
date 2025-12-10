@@ -11,10 +11,6 @@ const isLoggedIn = ref(false)
 const userId = ref(null)
 const alertMsg = ref('')
 const alertType = ref('success')
-const recaptchaToken = ref('')
-const recaptchaWidgetId = ref(null)
-
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY
 
 onMounted(() => {
   const userData = localStorage.getItem('domus_user')
@@ -22,59 +18,11 @@ onMounted(() => {
     const user = JSON.parse(userData)
     isLoggedIn.value = true
     userId.value = user.id || user.docId || null
+    // Pre-fill name and email from logged-in user
     name.value = [user.firstname, user.lastname].filter(Boolean).join(' ')
     email.value = user.email || ''
   }
-
-  // Load reCAPTCHA script
-  if (!document.getElementById('recaptcha-script')) {
-    const script = document.createElement('script')
-    script.id = 'recaptcha-script'
-    script.src = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit'
-    script.async = true
-    script.defer = true
-    document.head.appendChild(script)
-  }
-
-  // Define callback for when reCAPTCHA loads
-  window.onRecaptchaLoad = () => {
-    if (window.grecaptcha && document.getElementById('recaptcha-container')) {
-      recaptchaWidgetId.value = window.grecaptcha.render('recaptcha-container', {
-        sitekey: RECAPTCHA_SITE_KEY,
-        callback: onRecaptchaSuccess,
-        'expired-callback': onRecaptchaExpired
-      })
-    }
-  }
-
-  // If grecaptcha already loaded
-  if (window.grecaptcha && window.grecaptcha.render) {
-    setTimeout(() => {
-      if (document.getElementById('recaptcha-container')) {
-        recaptchaWidgetId.value = window.grecaptcha.render('recaptcha-container', {
-          sitekey: RECAPTCHA_SITE_KEY,
-          callback: onRecaptchaSuccess,
-          'expired-callback': onRecaptchaExpired
-        })
-      }
-    }, 100)
-  }
 })
-
-function onRecaptchaSuccess(token) {
-  recaptchaToken.value = token
-}
-
-function onRecaptchaExpired() {
-  recaptchaToken.value = ''
-}
-
-function resetRecaptcha() {
-  if (window.grecaptcha && recaptchaWidgetId.value !== null) {
-    window.grecaptcha.reset(recaptchaWidgetId.value)
-    recaptchaToken.value = ''
-  }
-}
 
 function showAlert(msg, type = 'success') {
   alertMsg.value = msg
@@ -90,11 +38,6 @@ async function submitForm() {
     return
   }
 
-  if (!recaptchaToken.value) {
-    showAlert('Please complete the reCAPTCHA verification.', 'error')
-    return
-  }
-
   sending.value = true
   try {
     const res = await fetch(`${API_BASE_URL}/api/admin/contact`, {
@@ -104,8 +47,7 @@ async function submitForm() {
         name: name.value,
         email: email.value,
         message: message.value,
-        senderId: userId.value,
-        recaptchaToken: recaptchaToken.value
+        senderId: userId.value
       })
     })
 
@@ -115,20 +57,18 @@ async function submitForm() {
       sent.value = true
       showAlert('Message sent successfully! We\'ll get back to you shortly.', 'success')
       setTimeout(() => (sent.value = false), 3000)
+      // Only clear message, keep name/email if logged in
       message.value = ''
       if (!isLoggedIn.value) {
         name.value = ''
         email.value = ''
       }
-      resetRecaptcha()
     } else {
       showAlert(result.message || 'Failed to send message. Please try again.', 'error')
-      resetRecaptcha()
     }
   } catch (err) {
     console.error('Contact form error:', err)
     showAlert('Network error. Please check your connection and try again.', 'error')
-    resetRecaptcha()
   } finally {
     sending.value = false
   }
@@ -166,7 +106,7 @@ async function submitForm() {
           </span>
           <div class="info">
             <h3>Phone</h3>
-            <p>+63 907 904 8433</p>
+            <p>+63 912 345 6789</p>
           </div>
         </div>
 
@@ -214,13 +154,7 @@ async function submitForm() {
           <textarea v-model="message" rows="5" placeholder="How can we help?" required></textarea>
         </div>
 
-        <!-- reCAPTCHA -->
-        <div class="field recaptcha-field">
-          <div id="recaptcha-container"></div>
-          <p v-if="!recaptchaToken" class="recaptcha-hint">Please verify you're not a robot</p>
-        </div>
-
-        <button class="send" type="submit" :disabled="sending || !recaptchaToken">
+        <button class="send" type="submit" :disabled="sending">
           <svg v-if="!sending" width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
           <span v-if="sending" class="spinner"></span>
           {{ sending ? 'Sending...' : 'Send' }}
@@ -320,20 +254,11 @@ input, textarea {
 }
 input:focus, textarea:focus { border-color: #e6b23a; }
 
+/* Readonly style for logged-in user fields */
 .readonly-input {
   background: #f5f5f5;
   color: #555;
   cursor: not-allowed;
-}
-
-/* reCAPTCHA styles */
-.recaptcha-field {
-  margin-bottom: 14px;
-}
-.recaptcha-hint {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-  color: #c62828;
 }
 
 .send {
@@ -344,7 +269,7 @@ input:focus, textarea:focus { border-color: #e6b23a; }
   box-shadow: 0 6px 20px #1976d244;
   transition: background 0.2s, opacity 0.2s;
 }
-.send:hover:not(:disabled) { background: #1565c0; }
+.send:hover { background: #1565c0; }
 .send:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .spinner {
@@ -361,6 +286,7 @@ input:focus, textarea:focus { border-color: #e6b23a; }
 
 .sent { color: #2e7d32; margin-top: 8px; font-weight: 600; }
 
+/* Responsive */
 @media (max-width: 920px) {
   .grid { grid-template-columns: 1fr; }
 }
