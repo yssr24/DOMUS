@@ -65,6 +65,7 @@ router.post('/mark-all-notifications-read', adminController.markAllNotifications
 
 router.post('/upload-file', upload.single('file'), adminController.uploadFile)
 
+router.get('/stream-file', adminController.streamFile)
 
 
 module.exports = router

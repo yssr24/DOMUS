@@ -696,68 +696,120 @@ exports.getDesigns = async (req, res) => {
 }
 // ...existing code...
 // List files under "files/"
+// ...existing code...
+
+// List files from Firebase Storage
 exports.getFiles = async (_req, res) => {
   try {
-    const admin = require('../config/database')
+    const db = admin.firestore()
     const bucket = admin.storage().bucket()
-    console.log('Storage bucket:', bucket.name) // debug
-
-    const prefix = 'files/'
-    const [gcsFiles] = await bucket.getFiles({ prefix })
-
-    const items = []
-    for (const f of gcsFiles) {
-      if (f.name.endsWith('/')) continue
-      const [meta] = await f.getMetadata()
-      const baseName = f.name.substring(f.name.lastIndexOf('/') + 1)
-      items.push({
-        id: f.name,
-        path: f.name, // e.g., files/my.pdf
-        name: baseName,
-        type: meta.contentType || '',
-        size: Number(meta.size) || 0,
-        uploadedAt: meta.updated || meta.timeCreated || null
+    
+    // Get files from Firestore collection (if you store file metadata there)
+    const filesSnap = await db.collection('files').get()
+    const files = []
+    
+    for (const doc of filesSnap.docs) {
+      const data = doc.data()
+      
+      // If fileUrl doesn't exist, generate a signed URL
+      let fileUrl = data.fileUrl
+      if (!fileUrl && data.path) {
+        try {
+          const file = bucket.file(data.path)
+          const [url] = await file.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+          })
+          fileUrl = url
+        } catch (e) {
+          console.error('Error generating signed URL:', e)
+        }
+      }
+      
+      files.push({
+        id: doc.id,
+        fileName: data.fileName || data.name,
+        type: data.type || data.contentType,
+        size: data.size,
+        path: data.path,
+        fileUrl: fileUrl,
+        projectId: data.projectId,
+        projectCode: data.projectCode,
+        uploadedAt: data.uploadedAt || data.createdAt,
+        uploadedBy: data.uploadedBy
       })
     }
-    items.sort((a,b) => new Date(b.uploadedAt||0) - new Date(a.uploadedAt||0))
-    res.json({ success: true, data: items })
+    
+    res.json({ success: true, data: files })
   } catch (err) {
-    console.error('getFiles error:', err?.message)
-    res.status(500).json({ success: false, message: 'Failed to list files.' })
+    console.error('getFiles error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch files.' })
   }
 }
 
+// ...existing code...
+
 // Stream a file (fixes CORS/range for pdf.js)
+// ...existing code...
+
+// Stream a file from Firebase Storage
 exports.streamFile = async (req, res) => {
   try {
-    const path = String(req.query.path || '')
-    if (!path || !path.startsWith('files/')) {
-      return res.status(400).json({ success: false, message: 'Invalid path.' })
+    const { path } = req.query
+    
+    if (!path) {
+      return res.status(400).json({ success: false, message: 'No file path provided' })
     }
-    const admin = require('../config/database')
+
     const bucket = admin.storage().bucket()
     const file = bucket.file(path)
+
+    // Check if file exists
     const [exists] = await file.exists()
-    if (!exists) return res.status(404).json({ success: false, message: 'Not found.' })
+    if (!exists) {
+      return res.status(404).json({ success: false, message: 'File not found' })
+    }
 
-    const [meta] = await file.getMetadata()
-    const baseName = path.substring(path.lastIndexOf('/') + 1)
-    const disp = String(req.query.disposition || 'inline').toLowerCase() === 'attachment' ? 'attachment' : 'inline'
+    // Get file metadata
+    const [metadata] = await file.getMetadata()
+    const contentType = metadata.contentType || 'application/octet-stream'
+    const fileSize = metadata.size
 
-    res.setHeader('Content-Type', meta.contentType || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `${disp}; filename="${encodeURIComponent(baseName)}"`)
-    res.setHeader('Cache-Control', 'private, max-age=60')
-    res.setHeader('Access-Control-Allow-Origin', '*')
+    // Set response headers
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Length', fileSize)
+    res.setHeader('Accept-Ranges', 'bytes')
+    
+    // Handle range requests for PDF viewing
+    const range = req.headers.range
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-')
+      const start = parseInt(parts[0], 10)
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const chunkSize = end - start + 1
 
-    file.createReadStream()
-      .on('error', e => {
-        console.error('streamFile error:', e?.message)
-        if (!res.headersSent) res.status(500).end('Stream error')
+      res.status(206)
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+      res.setHeader('Content-Length', chunkSize)
+
+      const stream = file.createReadStream({ start, end })
+      stream.pipe(res)
+    } else {
+      // Stream the entire file
+      const stream = file.createReadStream()
+      stream.on('error', (err) => {
+        console.error('Stream error:', err)
+        if (!res.headersSent) {
+          res.status(500).json({ success: false, message: 'Error streaming file' })
+        }
       })
-      .pipe(res)
+      stream.pipe(res)
+    }
   } catch (err) {
-    console.error('streamFile error:', err?.message)
-    if (!res.headersSent) res.status(500).json({ success: false, message: 'Failed to stream file.' })
+    console.error('streamFile error:', err)
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to stream file.' })
+    }
   }
 }
 

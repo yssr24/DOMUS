@@ -86,8 +86,10 @@ const routes = [
         component: Website
       },
       {
-        path: 'file-view',
-        component: FileView
+        path: '/admin/file-view',
+        name: 'AdminFileView',
+        component: () => import('./components/admin/content/file-view.vue'),
+        meta: { requiresAuth: true, role: 'admin' }
       },
       {
         path: 'project-management/settings/:id',
