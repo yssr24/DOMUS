@@ -122,9 +122,9 @@ import { API_BASE_URL } from '../../../config'
 
 
 const router = useRouter()
-const totalProjects = ref(24)
-const pendingProjects = ref(7)
-const completedProjects = ref(13)
+const totalProjects = ref()
+const pendingProjects = ref()
+const completedProjects = ref()
 
 const rows = ref([])
 const loading = ref(false)
@@ -132,6 +132,10 @@ const error = ref('')
 const search = ref('')
 const sortKey = ref('code')
 const sortDir = ref('asc')
+
+function onSettings(p) {
+  router.push(`/admin/project-management/settings/${p.id}`)
+}
 
 
 function onAddProject() {
@@ -232,10 +236,6 @@ async function fetchProjects() {
 function onAssign(p) {
   // TODO: open assign modal/sidebar
   alert(`Assign clicked for ${p.code}`)
-}
-function onSettings(p) {
-  // TODO: open settings modal/sidebar
-  alert(`Settings clicked for ${p.code}`)
 }
 
 onMounted(fetchProjects)

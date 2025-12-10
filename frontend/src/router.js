@@ -17,6 +17,8 @@ import NotificationCenter from './components/admin/content/notificationCenter.vu
 import Billing_and_finance from './components/admin/content/billing_and_finance.vue'
 import Website from './components/admin/content/Website.vue'
 import FileView from './components/admin/content/file-view.vue' // NEW
+import ProjectSettings from './components/admin/content/projectmanagement/setting.vue'
+
 
 
 import AddProject from './components/admin/content/projectmanagement/addProject.vue'
@@ -82,7 +84,11 @@ const routes = [
       {
         path: 'file-view',
         component: FileView
-      }
+      },
+      { path: 'project-management/settings/:id',
+        component: ProjectSettings,
+      },
+
 
 
     ]
