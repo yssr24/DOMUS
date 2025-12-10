@@ -307,7 +307,6 @@ async function sendProjectCreatedEmail({ to, clientName, projectLink }) {
 }
 
 
-// Create project + notification + email
 exports.addProject = async (req, res) => {
   try {
     const {
@@ -335,44 +334,87 @@ exports.addProject = async (req, res) => {
     const projectDocRef = await db.collection('projects').add({
       title,
       description: description || '',
-      location: location || null, // { province, city, barangay, zip }
-      clientId,                   // user doc id from users collection
+      location: location || null,
+      clientId,
       staffId: staffId || null,
+      staffAssigned: staffId ? [staffId] : [],
       leadArchitect: leadArchitect || '',
       createdAt: createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       status: status || 'pending',
       code
     })
 
-    // Fetch selected user's email/name and role using clientId
+    // Fetch selected user's data using clientId
     const userDocRef = db.collection('users').doc(clientId)
     const userDoc = await userDocRef.get()
     let clientEmail = ''
     let clientName = ''
+    
     if (userDoc.exists) {
       const u = userDoc.data()
       clientEmail = u.email
-      clientName = [u.firstname, u.lastname].filter(Boolean).join(' ')
+      const firstname = u.firstname || ''
+      const lastname = u.lastname || ''
+      clientName = [firstname, lastname].filter(Boolean).join(' ')
       
       // If user role is 'user', update it to 'client'
       if (u.role === 'user') {
-        await userDocRef.update({ role: 'client' })
+        // Update role in users collection
+        await userDocRef.update({ 
+          role: 'client',
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id)
+        })
+        
+        // Also create/update entry in clients collection using same document ID
+        await db.collection('clients').doc(clientId).set({
+          userId: clientId,
+          name: clientName || `${firstname} ${lastname}`.trim(),
+          firstname: firstname,
+          lastname: lastname,
+          email: clientEmail,
+          profilePic: u.profilePic || null,
+          gender: u.gender || null,
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id),
+          createdAt: u.createdAt || new Date().toISOString(),
+          convertedAt: new Date().toISOString()
+        }, { merge: true })
+      } else if (u.role === 'client') {
+        // User is already a client, just add the project to their assignedProjects
+        await userDocRef.update({
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id)
+        })
+        
+        // Update clients collection as well
+        await db.collection('clients').doc(clientId).update({
+          assignedProjects: admin.firestore.FieldValue.arrayUnion(projectDocRef.id)
+        }).catch(async () => {
+          // If client doc doesn't exist, create it
+          await db.collection('clients').doc(clientId).set({
+            userId: clientId,
+            name: clientName || `${firstname} ${lastname}`.trim(),
+            firstname: firstname,
+            lastname: lastname,
+            email: clientEmail,
+            profilePic: u.profilePic || null,
+            gender: u.gender || null,
+            assignedProjects: [projectDocRef.id],
+            createdAt: u.createdAt || new Date().toISOString(),
+            convertedAt: new Date().toISOString()
+          })
+        })
       }
     }
 
     // Create notification document
-    // Collection: notifications
-    // Fields: userId, type, message, read, createdAt, projectId, projectCode, title
     const message = `A new project (${code}) has been created for you.`
     await db.collection('notifications').add({
       userId: clientId,
+      projectId: projectDocRef.id,
       type: 'created_project',
       message,
       read: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      projectId: projectDocRef.id,
-      projectCode: code,
-      title
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     })
 
     // Send email if email is available
@@ -385,7 +427,6 @@ exports.addProject = async (req, res) => {
           projectLink
         })
       } catch (e) {
-        // Do not fail the whole request if email fails
         console.error('Email send failed:', e.message)
       }
     }
@@ -396,7 +437,6 @@ exports.addProject = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to add project.' })
   }
 }
-
 
 exports.getProjectsForClient = async (req, res) => {
   try {
