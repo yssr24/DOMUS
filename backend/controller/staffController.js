@@ -404,6 +404,8 @@ exports.getNotifications = async (req, res) => {
 
 // ...existing code...
 
+// ...existing code...
+
 // Get project detail with tasks and submissions
 exports.getProjectDetail = async (req, res) => {
   try {
