@@ -5,7 +5,6 @@ const nodemailer = require('nodemailer')
 const paths = require('../config/paths')
 const { FRONTEND_BASE_URL } = require('../config/appConfig')
 const crypto = require('crypto')
-const { RecaptchaEnterpriseServiceClient } = require('@google-cloud/recaptcha-enterprise')
 
 
 const nodemailerSendgrid = require('nodemailer-sendgrid');
@@ -713,80 +712,15 @@ exports.streamFile = async (req, res) => {
   }
 }
 
-
-// reCAPTCHA Enterprise verification function
-async function verifyRecaptchaEnterprise(token, recaptchaAction = 'contact') {
-  const projectID = process.env.GOOGLE_CLOUD_PROJECT_ID || 'dts-capstone'
-  const recaptchaKey = process.env.RECAPTCHA_SITE_KEY || '6LeuuiYsAAAAALCPXfxX4nXKFJAbrk1Tyy1mDPkM'
-
-  const client = new RecaptchaEnterpriseServiceClient()
-  const projectPath = client.projectPath(projectID)
-
-  const request = {
-    assessment: {
-      event: {
-        token: token,
-        siteKey: recaptchaKey,
-      },
-    },
-    parent: projectPath,
-  }
-
-  try {
-    const [response] = await client.createAssessment(request)
-
-    // Check if the token is valid
-    if (!response.tokenProperties.valid) {
-      console.log(`reCAPTCHA token invalid: ${response.tokenProperties.invalidReason}`)
-      return { success: false, reason: response.tokenProperties.invalidReason }
-    }
-
-    // Check if the expected action was executed
-    if (response.tokenProperties.action === recaptchaAction) {
-      const score = response.riskAnalysis.score
-      console.log(`reCAPTCHA score: ${score}`)
-      
-      // Score threshold: 0.5 or higher is considered human
-      // You can adjust this threshold based on your needs
-      if (score >= 0.5) {
-        return { success: true, score }
-      } else {
-        return { success: false, reason: 'Low score - suspected bot', score }
-      }
-    } else {
-      console.log('reCAPTCHA action mismatch')
-      return { success: false, reason: 'Action mismatch' }
-    }
-  } catch (err) {
-    console.error('reCAPTCHA verification error:', err)
-    return { success: false, reason: err.message }
-  } finally {
-    client.close()
-  }
-}
-
+// ...existing code...
 
 // Handle contact form submission
 exports.submitContactMessage = async (req, res) => {
   try {
-    const { name, email, message, senderId, recaptchaToken } = req.body
+    const { name, email, message, senderId } = req.body
 
     if (!name || !email || !message) {
       return res.status(400).json({ success: false, message: 'Name, email, and message are required.' })
-    }
-
-    // Verify reCAPTCHA Enterprise
-    if (!recaptchaToken) {
-      return res.status(400).json({ success: false, message: 'reCAPTCHA verification is required.' })
-    }
-
-    const recaptchaResult = await verifyRecaptchaEnterprise(recaptchaToken, 'contact')
-    if (!recaptchaResult.success) {
-      console.log('reCAPTCHA failed:', recaptchaResult.reason)
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Security verification failed. Please try again.' 
-      })
     }
 
     // Save to Firestore messages collection
@@ -794,7 +728,7 @@ exports.submitContactMessage = async (req, res) => {
       projectId: null,
       senderId: senderId || null,
       senderName: name,
-      senderEmail: email,
+      senderEmail: email, // User's email saved in database
       receiverId: 'admin',
       text: message,
       files: [],
@@ -822,6 +756,7 @@ exports.submitContactMessage = async (req, res) => {
           .label { font-weight: 600; color: #5a6675; }
           .value { color: #213547; }
           .email-link { color: #1976d2; text-decoration: none; }
+          .email-link:hover { text-decoration: underline; }
           .message-box { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; margin-top: 16px; }
           .footer { text-align: center; color: #888; font-size: 0.9rem; margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; }
           .reply-note { background: #e3f2fd; border-radius: 8px; padding: 12px; margin-top: 16px; text-align: center; }
@@ -850,7 +785,7 @@ exports.submitContactMessage = async (req, res) => {
             <p style="color: #213547; margin: 0; white-space: pre-wrap;">${message}</p>
           </div>
           <div class="reply-note">
-            <p style="margin: 0;">To reply, click: <a href="mailto:${email}?subject=Re: DOMUS Contact Form">${email}</a></p>
+            <p style="margin: 0;">To reply to this message, click: <a href="mailto:${email}?subject=Re: DOMUS Contact Form">${email}</a></p>
           </div>
           <div class="footer">
             This message was sent via the DOMUS website contact form.
@@ -861,7 +796,7 @@ exports.submitContactMessage = async (req, res) => {
     `
 
     await transporter.sendMail({
-      from: `"DOMUS Architecture" <${process.env.EMAIL_FROM}>`,
+      from: `"DOMUS Architecture" <${process.env.EMAIL_FROM}>`, // SendGrid verified sender
       to: 'domus.architecture92@gmail.com',
       subject: `New Contact Form Message from ${name} (${email})`,
       html: emailHtml
@@ -873,3 +808,4 @@ exports.submitContactMessage = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to send message.' })
   }
 }
+// ...existing code...

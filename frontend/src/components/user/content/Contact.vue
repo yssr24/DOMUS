@@ -11,9 +11,6 @@ const isLoggedIn = ref(false)
 const userId = ref(null)
 const alertMsg = ref('')
 const alertType = ref('success')
-const recaptchaReady = ref(false)
-
-const RECAPTCHA_SITE_KEY = '6LeuuiYsAAAAALCPXfxX4nXKFJAbrk1Tyy1mDPkM'
 
 onMounted(() => {
   const userData = localStorage.getItem('domus_user')
@@ -21,70 +18,11 @@ onMounted(() => {
     const user = JSON.parse(userData)
     isLoggedIn.value = true
     userId.value = user.id || user.docId || null
+    // Pre-fill name and email from logged-in user
     name.value = [user.firstname, user.lastname].filter(Boolean).join(' ')
     email.value = user.email || ''
   }
-
-  // Check if reCAPTCHA is loaded from index.html
-  checkRecaptchaReady()
 })
-
-function checkRecaptchaReady() {
-  let attempts = 0
-  const maxAttempts = 100 // 10 seconds
-
-  const check = setInterval(() => {
-    attempts++
-    
-    // Check for Enterprise
-    if (window.grecaptcha?.enterprise?.ready) {
-      window.grecaptcha.enterprise.ready(() => {
-        clearInterval(check)
-        recaptchaReady.value = true
-        console.log('reCAPTCHA Enterprise ready')
-      })
-      return
-    }
-    
-    // Check for Standard v3
-    if (window.grecaptcha?.ready) {
-      window.grecaptcha.ready(() => {
-        clearInterval(check)
-        recaptchaReady.value = true
-        console.log('reCAPTCHA ready')
-      })
-      return
-    }
-
-    if (attempts >= maxAttempts) {
-      clearInterval(check)
-      console.warn('reCAPTCHA not loaded, allowing form submission')
-      recaptchaReady.value = true
-    }
-  }, 100)
-}
-
-async function getRecaptchaToken() {
-  try {
-    // Try Enterprise
-    if (window.grecaptcha?.enterprise?.execute) {
-      const token = await window.grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, { action: 'contact' })
-      console.log('Got Enterprise token')
-      return token
-    }
-    
-    // Try Standard
-    if (window.grecaptcha?.execute) {
-      const token = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'contact' })
-      console.log('Got Standard token')
-      return token
-    }
-  } catch (e) {
-    console.error('reCAPTCHA error:', e)
-  }
-  
-  return null
-}
 
 function showAlert(msg, type = 'success') {
   alertMsg.value = msg
@@ -102,9 +40,6 @@ async function submitForm() {
 
   sending.value = true
   try {
-    const recaptchaToken = await getRecaptchaToken()
-    console.log('Token:', recaptchaToken ? 'obtained' : 'null')
-    
     const res = await fetch(`${API_BASE_URL}/api/admin/contact`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -112,8 +47,7 @@ async function submitForm() {
         name: name.value,
         email: email.value,
         message: message.value,
-        senderId: userId.value,
-        recaptchaToken: recaptchaToken || ''
+        senderId: userId.value
       })
     })
 
@@ -123,6 +57,7 @@ async function submitForm() {
       sent.value = true
       showAlert('Message sent successfully! We\'ll get back to you shortly.', 'success')
       setTimeout(() => (sent.value = false), 3000)
+      // Only clear message, keep name/email if logged in
       message.value = ''
       if (!isLoggedIn.value) {
         name.value = ''
@@ -142,6 +77,7 @@ async function submitForm() {
 
 <template>
   <section class="contact">
+    <!-- Alert -->
     <div v-if="alertMsg" :class="['alert', alertType]">
       {{ alertMsg }}
     </div>
@@ -152,6 +88,7 @@ async function submitForm() {
     </header>
 
     <div class="grid">
+      <!-- Contact cards -->
       <div class="cards">
         <div class="card">
           <span class="icon">
@@ -184,6 +121,7 @@ async function submitForm() {
         </div>
       </div>
 
+      <!-- Contact form -->
       <form class="form" @submit.prevent="submitForm">
         <h2>Send a Message</h2>
         <div class="row">
@@ -216,13 +154,6 @@ async function submitForm() {
           <textarea v-model="message" rows="5" placeholder="How can we help?" required></textarea>
         </div>
 
-        <p class="recaptcha-notice">
-          <span v-if="recaptchaReady" class="recaptcha-ready">✓ Protected by reCAPTCHA</span>
-          <span v-else class="recaptcha-loading">
-            <span class="loading-spinner"></span> Loading security...
-          </span>
-        </p>
-
         <button class="send" type="submit" :disabled="sending">
           <svg v-if="!sending" width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
           <span v-if="sending" class="spinner"></span>
@@ -230,18 +161,13 @@ async function submitForm() {
         </button>
 
         <p v-if="sent" class="sent">Thanks! We'll get back shortly.</p>
-
-        <p class="recaptcha-terms">
-          Protected by reCAPTCHA - 
-          <a href="https://policies.google.com/privacy" target="_blank">Privacy</a> · 
-          <a href="https://policies.google.com/terms" target="_blank">Terms</a>
-        </p>
       </form>
     </div>
   </section>
 </template>
 
 <style scoped>
+/* Alert styles */
 .alert {
   position: fixed;
   top: 80px;
@@ -328,45 +254,11 @@ input, textarea {
 }
 input:focus, textarea:focus { border-color: #e6b23a; }
 
+/* Readonly style for logged-in user fields */
 .readonly-input {
   background: #f5f5f5;
   color: #555;
   cursor: not-allowed;
-}
-
-.recaptcha-notice {
-  font-size: 0.85rem;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.recaptcha-ready {
-  color: #2e7d32;
-  font-weight: 600;
-}
-.recaptcha-loading {
-  color: #888;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.loading-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #ddd;
-  border-top-color: #888;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-.recaptcha-terms {
-  font-size: 0.75rem;
-  color: #888;
-  margin-top: 12px;
-}
-.recaptcha-terms a {
-  color: #1976d2;
-  text-decoration: none;
 }
 
 .send {
@@ -377,7 +269,7 @@ input:focus, textarea:focus { border-color: #e6b23a; }
   box-shadow: 0 6px 20px #1976d244;
   transition: background 0.2s, opacity 0.2s;
 }
-.send:hover:not(:disabled) { background: #1565c0; }
+.send:hover { background: #1565c0; }
 .send:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .spinner {
@@ -394,6 +286,7 @@ input:focus, textarea:focus { border-color: #e6b23a; }
 
 .sent { color: #2e7d32; margin-top: 8px; font-weight: 600; }
 
+/* Responsive */
 @media (max-width: 920px) {
   .grid { grid-template-columns: 1fr; }
 }
