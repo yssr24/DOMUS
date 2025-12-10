@@ -1447,4 +1447,86 @@ exports.removeStaffFromProject = async (req, res) => {
   }
 }
 
-// ...existing code...
+exports.getAdminNotifications = async (req, res) => {
+  try {
+    const { adminId, limit = 20 } = req.query
+    if (!adminId) {
+      return res.status(400).json({ success: false, message: 'adminId is required' })
+    }
+
+    const db = admin.firestore()
+
+    const notifsSnap = await db.collection('notifications')
+      .where('userId', '==', adminId)
+      .get()
+
+    let notifications = []
+    notifsSnap.forEach(doc => {
+      const data = doc.data()
+      notifications.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.() || data.createdAt
+      })
+    })
+
+    // Sort by createdAt descending
+    notifications.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return dateB - dateA
+    })
+
+    notifications = notifications.slice(0, parseInt(limit))
+
+    res.json({ success: true, data: notifications })
+  } catch (err) {
+    console.error('getAdminNotifications error:', err)
+    res.status(500).json({ success: false, message: 'Failed to fetch notifications.' })
+  }
+}
+
+// Mark notification as read
+exports.markNotificationRead = async (req, res) => {
+  try {
+    const { notificationId } = req.body
+    if (!notificationId) {
+      return res.status(400).json({ success: false, message: 'notificationId is required' })
+    }
+
+    const db = admin.firestore()
+    await db.collection('notifications').doc(notificationId).update({ read: true })
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('markNotificationRead error:', err)
+    res.status(500).json({ success: false, message: 'Failed to mark notification as read.' })
+  }
+}
+
+// Mark all notifications as read for admin
+exports.markAllNotificationsRead = async (req, res) => {
+  try {
+    const { adminId } = req.body
+    if (!adminId) {
+      return res.status(400).json({ success: false, message: 'adminId is required' })
+    }
+
+    const db = admin.firestore()
+    const notifsSnap = await db.collection('notifications')
+      .where('userId', '==', adminId)
+      .where('read', '==', false)
+      .get()
+
+    const batch = db.batch()
+    notifsSnap.forEach(doc => {
+      batch.update(doc.ref, { read: true })
+    })
+    await batch.commit()
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('markAllNotificationsRead error:', err)
+    res.status(500).json({ success: false, message: 'Failed to mark all notifications as read.' })
+  }
+}
