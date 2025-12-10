@@ -3,6 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const userRoutes = require("./router/userRoutes");
 const adminRoutes = require("./router/adminRoutes");
+const staffRoutes = require("./router/staffRoutes");
 
 dotenv.config();
 const app = express();
@@ -14,11 +15,10 @@ const admin = require("./config/database");
 
 admin.checkStorage?.();
 
-
-
 // User routes
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/staff", staffRoutes);
 
 // Test route
 app.get("/", (req, res) => {
