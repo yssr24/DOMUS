@@ -5,6 +5,7 @@ const nodemailer = require('nodemailer')
 const paths = require('../config/paths')
 const { FRONTEND_BASE_URL } = require('../config/appConfig')
 const crypto = require('crypto')
+const { RecaptchaEnterpriseServiceClient } = require('@google-cloud/recaptcha-enterprise')
 
 
 const nodemailerSendgrid = require('nodemailer-sendgrid');
@@ -713,6 +714,58 @@ exports.streamFile = async (req, res) => {
 }
 
 
+// reCAPTCHA Enterprise verification function
+async function verifyRecaptchaEnterprise(token, recaptchaAction = 'contact') {
+  const projectID = process.env.GOOGLE_CLOUD_PROJECT_ID || 'dts-capstone'
+  const recaptchaKey = process.env.RECAPTCHA_SITE_KEY || '6LeuuiYsAAAAALCPXfxX4nXKFJAbrk1Tyy1mDPkM'
+
+  const client = new RecaptchaEnterpriseServiceClient()
+  const projectPath = client.projectPath(projectID)
+
+  const request = {
+    assessment: {
+      event: {
+        token: token,
+        siteKey: recaptchaKey,
+      },
+    },
+    parent: projectPath,
+  }
+
+  try {
+    const [response] = await client.createAssessment(request)
+
+    // Check if the token is valid
+    if (!response.tokenProperties.valid) {
+      console.log(`reCAPTCHA token invalid: ${response.tokenProperties.invalidReason}`)
+      return { success: false, reason: response.tokenProperties.invalidReason }
+    }
+
+    // Check if the expected action was executed
+    if (response.tokenProperties.action === recaptchaAction) {
+      const score = response.riskAnalysis.score
+      console.log(`reCAPTCHA score: ${score}`)
+      
+      // Score threshold: 0.5 or higher is considered human
+      // You can adjust this threshold based on your needs
+      if (score >= 0.5) {
+        return { success: true, score }
+      } else {
+        return { success: false, reason: 'Low score - suspected bot', score }
+      }
+    } else {
+      console.log('reCAPTCHA action mismatch')
+      return { success: false, reason: 'Action mismatch' }
+    }
+  } catch (err) {
+    console.error('reCAPTCHA verification error:', err)
+    return { success: false, reason: err.message }
+  } finally {
+    client.close()
+  }
+}
+
+
 // Handle contact form submission
 exports.submitContactMessage = async (req, res) => {
   try {
@@ -722,21 +775,18 @@ exports.submitContactMessage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name, email, and message are required.' })
     }
 
-    // Verify reCAPTCHA
+    // Verify reCAPTCHA Enterprise
     if (!recaptchaToken) {
       return res.status(400).json({ success: false, message: 'reCAPTCHA verification is required.' })
     }
 
-    const recaptchaSecret = process.env.RECAPTCHA_SECRET_KEY
-    if (recaptchaSecret) {
-      const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${recaptchaSecret}&response=${recaptchaToken}`
-
-      const recaptchaRes = await fetch(verifyUrl, { method: 'POST' })
-      const recaptchaData = await recaptchaRes.json()
-
-      if (!recaptchaData.success) {
-        return res.status(400).json({ success: false, message: 'reCAPTCHA verification failed. Please try again.' })
-      }
+    const recaptchaResult = await verifyRecaptchaEnterprise(recaptchaToken, 'contact')
+    if (!recaptchaResult.success) {
+      console.log('reCAPTCHA failed:', recaptchaResult.reason)
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Security verification failed. Please try again.' 
+      })
     }
 
     // Save to Firestore messages collection
