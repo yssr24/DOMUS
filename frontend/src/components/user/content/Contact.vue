@@ -11,11 +11,9 @@ const isLoggedIn = ref(false)
 const userId = ref(null)
 const alertMsg = ref('')
 const alertType = ref('success')
-const recaptchaToken = ref('')
-const recaptchaWidgetId = ref(null)
-const recaptchaLoaded = ref(false)
+const recaptchaReady = ref(false)
 
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LetiSYsAAAAALzQOBmd74aLK7PX69bU3nkOq0Sq'
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeuuiYsAAAAALCPXfxX4nXKFJAbrk1Tyy1mDPkM'
 
 onMounted(() => {
   const userData = localStorage.getItem('domus_user')
@@ -27,70 +25,35 @@ onMounted(() => {
     email.value = user.email || ''
   }
 
-  // Load reCAPTCHA script
+  // Load reCAPTCHA v3 script
   loadRecaptchaScript()
 })
 
 function loadRecaptchaScript() {
   if (document.getElementById('recaptcha-script')) {
-    // Script already exists, try to render
-    if (window.grecaptcha && window.grecaptcha.render) {
-      renderRecaptcha()
-    }
+    recaptchaReady.value = true
     return
   }
 
   const script = document.createElement('script')
   script.id = 'recaptcha-script'
-  script.src = 'https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit'
+  script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`
   script.async = true
   script.defer = true
+  script.onload = () => {
+    recaptchaReady.value = true
+  }
   document.head.appendChild(script)
-
-  // Define global callback
-  window.onRecaptchaLoad = () => {
-    recaptchaLoaded.value = true
-    renderRecaptcha()
-  }
 }
 
-function renderRecaptcha() {
-  const container = document.getElementById('recaptcha-container')
-  if (!container || recaptchaWidgetId.value !== null) return
-
+async function getRecaptchaToken() {
+  if (!window.grecaptcha) return null
   try {
-    recaptchaWidgetId.value = window.grecaptcha.render('recaptcha-container', {
-      sitekey: RECAPTCHA_SITE_KEY,
-      callback: onRecaptchaSuccess,
-      'expired-callback': onRecaptchaExpired,
-      'error-callback': onRecaptchaError
-    })
+    const token = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'contact' })
+    return token
   } catch (e) {
-    console.error('reCAPTCHA render error:', e)
-  }
-}
-
-function onRecaptchaSuccess(token) {
-  recaptchaToken.value = token
-}
-
-function onRecaptchaExpired() {
-  recaptchaToken.value = ''
-}
-
-function onRecaptchaError() {
-  recaptchaToken.value = ''
-  showAlert('reCAPTCHA error. Please refresh and try again.', 'error')
-}
-
-function resetRecaptcha() {
-  if (window.grecaptcha && recaptchaWidgetId.value !== null) {
-    try {
-      window.grecaptcha.reset(recaptchaWidgetId.value)
-    } catch (e) {
-      console.error('reCAPTCHA reset error:', e)
-    }
-    recaptchaToken.value = ''
+    console.error('reCAPTCHA error:', e)
+    return null
   }
 }
 
@@ -108,13 +71,21 @@ async function submitForm() {
     return
   }
 
-  if (!recaptchaToken.value) {
-    showAlert('Please complete the reCAPTCHA verification.', 'error')
+  if (!recaptchaReady.value) {
+    showAlert('Please wait for security verification to load.', 'error')
     return
   }
 
   sending.value = true
   try {
+    // Get reCAPTCHA v3 token
+    const recaptchaToken = await getRecaptchaToken()
+    if (!recaptchaToken) {
+      showAlert('Security verification failed. Please refresh and try again.', 'error')
+      sending.value = false
+      return
+    }
+
     const res = await fetch(`${API_BASE_URL}/api/admin/contact`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -123,7 +94,7 @@ async function submitForm() {
         email: email.value,
         message: message.value,
         senderId: userId.value,
-        recaptchaToken: recaptchaToken.value
+        recaptchaToken
       })
     })
 
@@ -138,15 +109,12 @@ async function submitForm() {
         name.value = ''
         email.value = ''
       }
-      resetRecaptcha()
     } else {
       showAlert(result.message || 'Failed to send message. Please try again.', 'error')
-      resetRecaptcha()
     }
   } catch (err) {
     console.error('Contact form error:', err)
     showAlert('Network error. Please check your connection and try again.', 'error')
-    resetRecaptcha()
   } finally {
     sending.value = false
   }
@@ -232,15 +200,14 @@ async function submitForm() {
           <textarea v-model="message" rows="5" placeholder="How can we help?" required></textarea>
         </div>
 
-        <!-- reCAPTCHA -->
-        <div class="field recaptcha-field">
-          <label>Verify you're human <span class="required">*</span></label>
-          <div id="recaptcha-container"></div>
-          <p v-if="!recaptchaToken" class="recaptcha-hint">Please check the box above</p>
-          <p v-else class="recaptcha-success">✓ Verified</p>
-        </div>
+        <!-- reCAPTCHA v3 badge notice -->
+        <p class="recaptcha-notice">
+          This site is protected by reCAPTCHA and the Google
+          <a href="https://policies.google.com/privacy" target="_blank">Privacy Policy</a> and
+          <a href="https://policies.google.com/terms" target="_blank">Terms of Service</a> apply.
+        </p>
 
-        <button class="send" type="submit" :disabled="sending || !recaptchaToken">
+        <button class="send" type="submit" :disabled="sending || !recaptchaReady">
           <svg v-if="!sending" width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
           <span v-if="sending" class="spinner"></span>
           {{ sending ? 'Sending...' : 'Send' }}
@@ -329,7 +296,6 @@ async function submitForm() {
 }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 label { font-weight: 600; color: #213547; }
-.required { color: #c62828; }
 input, textarea {
   padding: 10px 12px;
   border: 1px solid #e0e0e0;
@@ -347,20 +313,18 @@ input:focus, textarea:focus { border-color: #e6b23a; }
   cursor: not-allowed;
 }
 
-/* reCAPTCHA styles */
-.recaptcha-field {
-  margin-bottom: 14px;
+/* reCAPTCHA notice */
+.recaptcha-notice {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 12px;
 }
-.recaptcha-hint {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-  color: #c62828;
+.recaptcha-notice a {
+  color: #1976d2;
+  text-decoration: none;
 }
-.recaptcha-success {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-  color: #2e7d32;
-  font-weight: 600;
+.recaptcha-notice a:hover {
+  text-decoration: underline;
 }
 
 .send {
