@@ -56,9 +56,9 @@ exports.login = async (req, res) => {
   if (!valid) {
     return res.json({ success: false, message: 'Invalid email or password.' })
   }
-  // Don't send password back
+  // Don't send password back, but include the document ID
   const { password: _, ...user } = userData
-  res.json({ success: true, user })
+  res.json({ success: true, user: { ...user, id: userDoc.id } })
 }
 
 exports.signup = async (req, res) => {
