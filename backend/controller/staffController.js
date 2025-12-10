@@ -360,6 +360,9 @@ exports.markAllNotificationsRead = async (req, res) => {
   }
 }
 
+// ...existing code...
+
+// Get notifications for staff
 exports.getNotifications = async (req, res) => {
   try {
     const { staffId, limit = 20 } = req.query
@@ -369,7 +372,6 @@ exports.getNotifications = async (req, res) => {
 
     const db = admin.firestore()
 
-    // Fetch notifications without orderBy to avoid index requirement
     const notifsSnap = await db.collection('notifications')
       .where('userId', '==', staffId)
       .get()
@@ -384,14 +386,13 @@ exports.getNotifications = async (req, res) => {
       })
     })
 
-    // Sort in memory by createdAt descending
+    // Sort by createdAt descending
     notifications.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
       return dateB - dateA
     })
 
-    // Limit results
     notifications = notifications.slice(0, parseInt(limit))
 
     res.json({ success: true, data: notifications })
@@ -400,3 +401,5 @@ exports.getNotifications = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch notifications.' })
   }
 }
+
+// ...existing code (getStaffOverview, getStaffProjects, etc.)...
