@@ -307,8 +307,6 @@ async function sendProjectCreatedEmail({ to, clientName, projectLink }) {
 }
 
 
-// ...existing code...
-
 // Create project + notification + email
 exports.addProject = async (req, res) => {
   try {
@@ -398,8 +396,6 @@ exports.addProject = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to add project.' })
   }
 }
-
-// ...existing code...
 
 exports.getProjectsForClient = async (req, res) => {
   try {
